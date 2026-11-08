@@ -26,9 +26,12 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 # logo/ 与 presets/ 是本地资源，会随镜像提供，运行时不请求任何外部地址。
 COPY . /app
 
+# 挂载空的 config 卷会遮住 /app/config 下的模板，故在镜像内另存一份只读备份，
+# start.sh 启动时按需补齐 config.example.json / organize.json / config.json。
 RUN ln -snf /usr/share/zoneinfo/$TIME_ZONE /etc/localtime \
     && echo "$TIME_ZONE" > /etc/timezone \
     && chmod +x /app/start.sh \
-    && mkdir -p /app/config /app/output/playlists /app/log
+    && mkdir -p /app/config /app/output/playlists /app/log /app/defaults \
+    && cp /app/config/config.example.json /app/config/organize.json /app/defaults/
 
 CMD ["/bin/bash", "/app/start.sh"]

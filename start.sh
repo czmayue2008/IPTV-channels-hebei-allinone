@@ -3,11 +3,22 @@
 cd "$(dirname "$0")" || exit 1
 mkdir -p config output/playlists log
 
-# 公开镜像不含任何真实机顶盒凭据。首次启动时从占位示例生成一份空配置，
-# 保证服务可直接起来；用户在 http://<内网IP>:5000/config 填入自己的参数即可。
+# 公开镜像不含任何真实机顶盒凭据。若挂载了空的 config 卷，/app/config 里的
+# 模板会被遮住，此时从镜像内置的 defaults/ 备份补齐，保证服务可直接启动。
+for f in config.example.json organize.json; do
+  if [ ! -f "config/$f" ] && [ -f "defaults/$f" ]; then
+    cp "defaults/$f" "config/$f"
+    echo "[start.sh] 已从内置模板补齐 config/$f"
+  fi
+done
+
 if [ ! -f config/config.json ]; then
-  cp config/config.example.json config/config.json
-  echo "[start.sh] 已生成 config/config.json（占位示例），请在 /config 页面填写真实参数"
+  if [ -f config/config.example.json ]; then
+    cp config/config.example.json config/config.json
+    echo "[start.sh] 已生成 config/config.json（占位示例），请在 /config 页面填写真实参数"
+  else
+    echo "[start.sh] 警告：缺少 config/config.json 与模板，请手动挂载配置文件"
+  fi
 fi
 
 exec python app.py
