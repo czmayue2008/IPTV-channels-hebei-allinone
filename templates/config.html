@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPTV 配置</title>
+    <link href="/static/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            min-height: 100vh;
+            padding: 2rem 0;
+        }
+        .main-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .config-card {
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <div class="row g-4">
+            <div class="col-12">
+                <div class="card config-card">
+                    <div class="card-body">
+                        <h1 class="card-title mb-4">机顶盒配置（河北电信 · All-in-One）</h1>
+                        <div class="alert alert-warning">
+                            配置只保存在服务器本地 <code>config/config.json</code>，不通过 Web 静态目录对外提供。<br>
+                            带 <strong>*</strong> 的字段来自你自己的机顶盒抓包，含真实账号凭据，请勿公开分享。<br>
+                            本机顶盒配置只用于访问<strong>内网 EPG</strong>；本服务不会请求任何外部地址。
+                        </div>
+                        <form id="configForm">
+                            <div class="mb-3">
+                                <label for="AuthenticationIP" class="form-label">EPG 服务器地址 *</label>
+                                <input type="text" class="form-control" id="AuthenticationIP" name="AuthenticationIP" value="{{ config.get('AuthenticationIP', '') }}" placeholder="例如 http://192.168.x.x:33200" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="UserID" class="form-label">UserID *</label>
+                                <input type="text" class="form-control" id="UserID" name="UserID" value="{{ config.get('UserID', '') }}" placeholder="抓包获取，形如 xxxxxxxx@itv" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="ip" class="form-label">机顶盒 IP（河北版仅作记录，可随便填）</label>
+                                <input type="text" class="form-control" id="ip" name="ip" value="{{ config.get('ip', '') }}" placeholder="例如 10.x.x.x">
+                            </div>
+                            <div class="mb-3">
+                                <label for="mac" class="form-label">MAC 地址 *</label>
+                                <input type="text" class="form-control" id="mac" name="mac" value="{{ config.get('mac', '') }}" placeholder="机顶盒背面 MAC，如 00:00:00:00:00:00" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="STBID" class="form-label">STBID *</label>
+                                <input type="text" class="form-control" id="STBID" name="STBID" value="{{ config.get('STBID', '') }}" placeholder="机顶盒背面 STBID" required>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="STBType" class="form-label">STBType *</label>
+                                        <input type="text" class="form-control" id="STBType" name="STBType" value="{{ config.get('STBType', '') }}" placeholder="机顶盒型号" required>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="STBVersion" class="form-label">STBVersion *</label>
+                                        <input type="text" class="form-control" id="STBVersion" name="STBVersion" value="{{ config.get('STBVersion', '') }}" placeholder="机顶盒软件版本" required>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="Authenticator" class="form-label">Authenticator *（256 位 hex，抓包获取）</label>
+                                <input type="text" class="form-control" id="Authenticator" name="Authenticator" value="{{ config.get('Authenticator', '') }}" placeholder="从 ValidAuthenticationHWCTC.jsp 的 POST 表单中提取" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="key" class="form-label">Key（河北版不使用，留空即可）</label>
+                                <input type="text" class="form-control" id="key" name="key" value="{{ config.get('key', '') }}" placeholder="仅四川版 3DES 反推用">
+                            </div>
+                            <div class="mb-4">
+                                <label for="RTP2HTTPD" class="form-label">RTP2HTTPD / udpxy 地址 *</label>
+                                <input type="text" class="form-control" id="RTP2HTTPD" name="RTP2HTTPD" value="{{ config.get('RTP2HTTPD', '') }}" placeholder="例如 http://192.168.x.x:8888" required>
+                            </div>
+                            <div class="mb-4">
+                                <label for="UserAgent" class="form-label">UserAgent</label>
+                                <input type="text" class="form-control" id="UserAgent" name="UserAgent" value="{{ config.get('UserAgent', '') }}" placeholder="默认 Mozilla/5.0 (X11; U; Linux i686; en-US) AppleWebKit/534.0 (KHTML, like Gecko)">
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="templateName" class="form-label">templateName *</label>
+                                        <input type="text" class="form-control" id="templateName" name="templateName" value="{{ config.get('templateName', '') }}" placeholder="EPG 模板名，抓包获取">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="areaId" class="form-label">areaId *</label>
+                                        <input type="text" class="form-control" id="areaId" name="areaId" value="{{ config.get('areaId', '') }}" placeholder="区域 ID，抓包获取">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="epg_days" class="form-label">EPG 天数</label>
+                                        <input type="number" class="form-control" id="epg_days" name="epg_days" value="{{ config.get('epg_days', 2) }}" min="1" max="7">
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="conntype" class="form-label">conntype</label>
+                                        <input type="text" class="form-control" id="conntype" name="conntype" value="{{ config.get('conntype', '4') }}">
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="UserField" class="form-label">UserField</label>
+                                        <input type="text" class="form-control" id="UserField" name="UserField" value="{{ config.get('UserField', '2') }}">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="EPGTemplate" class="form-label">EPG Referer 模板路径</label>
+                                <input type="text" class="form-control" id="EPGTemplate" name="EPGTemplate" value="{{ config.get('EPGTemplate', '/EPG/jsp/hbdxpukka/en/epg/pages/tvod-player/index.html') }}">
+                            </div>
+                            <hr>
+                            <p class="text-muted">本项目为纯内网运行，抓取任务固定带 <code>--no-sync</code>，<strong>不会向任何外部 Git 仓库同步</strong>。下面两项仅为兼容旧配置保留，请留空。</p>
+                            <div class="mb-3">
+                                <label for="epg_git_repo" class="form-label">EPG Git 仓库地址（禁用，留空）</label>
+                                <input type="text" class="form-control" id="epg_git_repo" name="epg_git_repo" value="{{ config.get('epg_git_repo', '') }}" placeholder="留空">
+                            </div>
+                            <div class="mb-3">
+                                <label for="epg_git_private_token" class="form-label">EPG Git Token（禁用，留空）</label>
+                                <input type="password" class="form-control" id="epg_git_private_token" name="epg_git_private_token" value="{{ config.get('epg_git_private_token', '') }}" placeholder="留空">
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100">保存配置并抓取整理</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('configForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(this);
+            const config = {};
+            formData.forEach((value, key) => {
+                // 空字符串也要提交，否则无法清空已有配置
+                config[key] = value.trim();
+            });
+
+            const submitButton = document.querySelector('button[type="submit"]');
+            submitButton.disabled = true;
+
+            fetch('/save_config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(config)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    throw new Error('保存配置失败：' + data.message);
+                }
+                return fetch('/api/job/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode: 'full' })
+                });
+            })
+            .then(response => response.json())
+            .then(data => {
+                setTimeout(() => { window.location.href = '/'; }, 100);
+            })
+            .catch(error => {
+                console.error(error);
+                alert(error.message || error);
+            })
+            .finally(() => {
+                submitButton.disabled = false;
+            });
+        });
+    </script>
+</body>
+</html>

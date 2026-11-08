@@ -1,0 +1,21 @@
+{
+  "AuthenticationIP": "http://<EPG服务器内网IP>:<端口>",
+  "UserID": "<你的IPTV账号@itv>",
+  "mac": "<机顶盒MAC>",
+  "STBID": "<机顶盒STBID>",
+  "STBType": "<机顶盒型号>",
+  "STBVersion": "<机顶盒软件版本>",
+  "Authenticator": "<256位hex，来自ValidAuthenticationHWCTC.jsp的POST表单>",
+  "UserAgent": "Mozilla/5.0 (X11; U; Linux i686; en-US) AppleWebKit/534.0 (KHTML, like Gecko)",
+  "ip": "<机顶盒内网IP，可随便填>",
+  "templateName": "<EPG模板名>",
+  "areaId": "<区域ID>",
+  "RTP2HTTPD": "http://<组播代理IP>:<端口>",
+  "EPGTemplate": "/EPG/jsp/hbdxpukka/en/epg/pages/tvod-player/index.html",
+  "epg_days": 2,
+  "conntype": "4",
+  "UserField": "2",
+  "key": "",
+  "epg_git_repo": "",
+  "epg_git_private_token": ""
+}

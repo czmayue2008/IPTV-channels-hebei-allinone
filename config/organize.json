@@ -1,0 +1,141 @@
+{
+  "_about": "整理层配置。source 只读取本项目 output/ 下的抓取产物；整理结果写入 output/playlists/，绝不会改写源数据。",
+  "source": {
+    "playlist": "output/hbtv.m3u",
+    "epg": "output/epg.xml"
+  },
+  "output_dir": "output/playlists",
+  "list_name": "河北电信 IPTV",
+  "epg_url": "/playlists/epg.xml",
+  "server_port": 5000,
+  "logo": {
+    "dir": "logo",
+    "base_url": "/logo/",
+    "_base_url_note": "根相对路径 /logo/ 由本项目 Web 服务在内网提供；返回播放列表时会自动补全为当前访问主机的绝对地址。",
+    "aliases": {
+      "CCTV4中文国际欧洲": "CCTV4",
+      "CCTV4中文国际美洲": "CCTV4",
+      "CGTN 法语": "CGTN法语",
+      "CGTN法语": "CGTN法语",
+      "凤凰卫视中文台": "凤凰中文",
+      "凤凰卫视资讯台": "凤凰资讯",
+      "凤凰卫视电影台": "凤凰中文",
+      "中国交通频道": "中国交通",
+      "kaku少儿": "卡酷动画",
+      "书画": "书画频道",
+      "卫生健康": "百姓健康",
+      "CCTV5+": "CCTV5+",
+      "CCTV-5+高清": "CCTV5+",
+      "CCTV16 4K": "CCTV16",
+      "CCTV4K": "CCTV4K"
+    }
+  },
+  "normalize": {
+    "fullwidth_to_halfwidth": true,
+    "strip_hd_words": [
+      "超高清",
+      "高清",
+      "标清"
+    ],
+    "strip_chars": [
+      "-"
+    ],
+    "map_4k_to_sd_id": true
+  },
+  "groups": [
+    {
+      "name": "央视频道",
+      "keywords": [
+        "CCTV",
+        "CETV",
+        "CGTN"
+      ]
+    },
+    {
+      "name": "卫视频道",
+      "keywords": [
+        "卫视"
+      ]
+    },
+    {
+      "name": "河北本地",
+      "keywords": [
+        "河北",
+        "石家庄",
+        "沧州",
+        "承德",
+        "张家口",
+        "秦皇岛",
+        "唐山",
+        "廊坊",
+        "保定",
+        "衡水",
+        "邢台",
+        "邯郸",
+        "定州",
+        "雄安",
+        "长城慢直播"
+      ]
+    },
+    {
+      "name": "购物频道",
+      "keywords": [
+        "购物",
+        "聚鲨",
+        "家有",
+        "好享",
+        "优购物",
+        "三佳"
+      ]
+    },
+    {
+      "name": "测试与直播室",
+      "keywords": [
+        "慢直播",
+        "直播室",
+        "辅视角",
+        "九屏",
+        "测试频道",
+        "临时直播",
+        "信号"
+      ]
+    },
+    {
+      "name": "其他频道",
+      "keywords": []
+    }
+  ],
+  "exclude_keywords": [],
+  "include_keywords": [],
+  "preset": "",
+  "proxy": {
+    "_note": "rtp2httpd 留空表示沿用源文件地址；udpxy 填你自己的内网组播代理地址。全部为内网地址，运行时不访问任何外部服务。",
+    "rtp2httpd": "",
+    "udpxy": "http://127.0.0.1:4022",
+    "rtsp_proxy": "",
+    "r2h_token": ""
+  },
+  "fcc": "",
+  "keep_fec": true,
+  "catchup_days_default": 1,
+  "write_m3u_alias": true,
+  "formats": [
+    "kodi",
+    "aptv",
+    "tvbox",
+    "udpxy",
+    "rtp2httpd",
+    "diyp",
+    "simple"
+  ],
+  "schedule": {
+    "_about": "定时整理：enabled 开关；mode=interval 按分钟间隔，mode=daily 每天固定时间；run_fetch=true 时先重新抓取频道与 EPG 再整理。",
+    "enabled": false,
+    "mode": "interval",
+    "interval_minutes": 360,
+    "daily_time": "04:30",
+    "run_fetch": true,
+    "epg_days": 2,
+    "run_at_startup": false
+  }
+}

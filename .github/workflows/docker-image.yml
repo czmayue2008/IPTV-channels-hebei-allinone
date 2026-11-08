@@ -1,0 +1,87 @@
+name: Build & Publish Docker Image
+
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ "v*" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: "目标平台，多架构填 linux/amd64,linux/arm64"
+        required: false
+        default: "linux/amd64"
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE_NAME: iptv-channels-hebei-allinone
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      DH_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+      DH_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # GHCR 使用内置 GITHUB_TOKEN，无需任何额外凭据
+      - name: Login to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 只有在仓库 Secrets 中配置了 Docker Hub 凭据时才登录并推送
+      - name: Login to Docker Hub
+        if: github.event_name != 'pull_request' && env.DH_TOKEN != ''
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DH_USER }}
+          password: ${{ env.DH_TOKEN }}
+
+      - name: Compose image tags
+        id: tags
+        shell: bash
+        run: |
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          SHORT="${GITHUB_SHA::7}"
+          {
+            echo 'tags<<EOF'
+            echo "ghcr.io/$OWNER/${{ env.IMAGE_NAME }}:latest"
+            echo "ghcr.io/$OWNER/${{ env.IMAGE_NAME }}:sha-$SHORT"
+            if [ -n "$DH_USER" ]; then
+              echo "docker.io/$DH_USER/${{ env.IMAGE_NAME }}:latest"
+              echo "docker.io/$DH_USER/${{ env.IMAGE_NAME }}:sha-$SHORT"
+            fi
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+          echo "镜像标签："
+          grep -E '^(ghcr|docker)\.io/' "$GITHUB_OUTPUT" || true
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ inputs.platforms || 'linux/amd64' }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.description=HBTV All-in-One 河北电信 IPTV 抓取+整理+内网订阅

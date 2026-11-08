@@ -1,0 +1,51 @@
+# ---------------------------------------------------------------
+# 真实机顶盒凭据与运行时产物，严禁进入公开镜像
+# Dockerfile 使用 COPY . /app，未列在此处的文件都会被打包
+# ---------------------------------------------------------------
+.git
+.gitignore
+.github
+
+# 真实配置（含 UserID / MAC / STBID / Authenticator）
+config/config.json
+config/config.local.json
+config/*.local.json
+config/*.bak
+
+# 频道列表 / EPG / 日志（含内网地址、组播地址、token、回看凭据）
+# 整理产物 output/playlists/ 同样排除，容器启动后由手动/定时整理生成
+output/*
+!output/.gitignore
+!output/.gitkeep
+log/*
+!log/.gitignore
+epg.xml
+hbtv.*
+sctv.*
+*.log
+
+# 抓包与中间产物
+*.pcap
+*.pcapng
+packets/
+epg_data/
+epg_repo/
+channel_list_raw.html
+iptv_request_log.txt
+
+# Python / 编辑器 / 本地环境
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+env/
+.idea/
+.vscode/
+.env
+.env.*
+
+# 说明文档与镜像自身定义（不影响运行）
+Dockerfile
+.dockerignore
+*.md

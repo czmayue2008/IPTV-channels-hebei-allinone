@@ -1,0 +1,38 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.idea/
+.vscode/
+*.log
+
+# 真实机顶盒凭据（严禁入库）
+config.json
+config.local.json
+config/*.local.json
+
+# 抓取产物与整理产物（含内网地址、回看凭据，严禁入库）
+output/*
+!output/.gitignore
+!output/.gitkeep
+epg.xml
+hbtv.*
+sctv.*
+
+# 抓包 / 中间产物
+*.pcap
+*.pcapng
+packets/
+epg_data/
+channel_list_raw.html
+iptv_request_log.txt
+log/*.jsp
+log/key.txt
+epg_repo/

@@ -1,0 +1,4 @@
+# 运行时只依赖 Flask（Web 服务）与 requests（内网 EPG 抓取）。
+# 整理层与定时调度全部使用 Python 标准库；不再需要 socketio / cors / pycryptodome。
+Flask>=3.0,<4
+requests>=2.31,<3

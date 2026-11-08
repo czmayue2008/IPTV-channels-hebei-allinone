@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HBTV All-in-One · 内网控制台</title>
+<link href="/static/css/bootstrap.min.css" rel="stylesheet">
+<style>
+body{background:#f5f7fa;padding-bottom:40px}
+.topbar{background:#0f172a;color:#fff;padding:14px 0 12px;margin-bottom:20px}
+.topbar h1{font-size:20px;margin:0}
+.topbar a{color:#93c5fd;text-decoration:none}
+.mono{font-family:Consolas,"Courier New",monospace}
+.card{border:0;box-shadow:0 1px 3px rgba(15,23,42,.08);border-radius:10px;margin-bottom:16px}
+.card-header{background:#fff;border-bottom:1px solid #eef0f4;font-weight:600;padding:12px 16px}
+#logBox{height:230px;overflow-y:auto;background:#0f172a;color:#cbd5e1;border-radius:8px;padding:12px;font:12px/1.65 Consolas,monospace}
+#logBox .ok{color:#86efac}#logBox .error{color:#fca5a5}#logBox .warn{color:#fcd34d}
+.file-name{font-family:Consolas,monospace;font-weight:600}
+.badge-m3u{background:#dbeafe;color:#1d4ed8}
+.badge-other{background:#e5e7eb;color:#4b5563}
+table{font-size:14px}td,th{vertical-align:middle!important}
+.hint{font-size:13px;color:#64748b}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="container d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <div><h1>HBTV All-in-One · 河北电信 IPTV</h1><div class="small text-secondary">抓取 + 整理 + 多格式订阅 · 纯内网运行，零外部请求</div></div>
+    <div class="small">
+      本机访问：<span class="mono" id="hostText">-</span><br>
+      <a href="/playlists/" target="_blank">订阅中心</a> · <a href="/config">机顶盒配置</a> · <a href="/health" target="_blank">健康检查</a>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+
+  <div id="alertBox"></div>
+
+  <div class="row g-3">
+    <div class="col-lg-7">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span>手动整理</span><span id="jobBadge" class="badge bg-secondary">空闲</span>
+        </div>
+        <div class="card-body">
+          <p class="hint mb-3">「立即整理」只用现有 <span class="mono">output/hbtv.m3u</span> 重新生成播放列表；「抓取并整理」会先连内网 EPG 重新抓频道与节目单，再整理。</p>
+          <div class="d-flex flex-wrap gap-2">
+            <button id="btnOrganize" class="btn btn-primary">立即整理</button>
+            <button id="btnFull" class="btn btn-outline-primary">抓取并整理</button>
+            <a class="btn btn-outline-secondary" href="/playlists/" target="_blank">打开订阅中心</a>
+          </div>
+          <hr>
+          <div class="row small">
+            <div class="col-md-6">上次运行：<span id="lastRun" class="mono">-</span></div>
+            <div class="col-md-6">本次任务：<span id="thisRun" class="mono">-</span></div>
+            <div class="col-md-6 mt-1">运行结果：<span id="lastOk">-</span></div>
+            <div class="col-md-6 mt-1">下次定时：<span id="nextRun" class="mono">未启用</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">定时整理</div>
+        <div class="card-body">
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" id="schEnabled">
+            <label class="form-check-label" for="schEnabled">启用定时整理（内置调度，无需系统定时任务）</label>
+          </div>
+          <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+              <label class="form-label small">模式</label>
+              <select class="form-select form-select-sm" id="schMode">
+                <option value="interval">按间隔（分钟）</option>
+                <option value="daily">每天固定时间</option>
+              </select>
+            </div>
+            <div class="col-md-3" id="boxInterval">
+              <label class="form-label small">间隔分钟</label>
+              <input type="number" class="form-control form-control-sm" id="schInterval" min="1" max="10080" value="360">
+            </div>
+            <div class="col-md-3" id="boxDaily" style="display:none">
+              <label class="form-label small">每日时间</label>
+              <input type="time" class="form-control form-control-sm" id="schDaily" value="04:30">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small">EPG 天数</label>
+              <input type="number" class="form-control form-control-sm" id="schEpgDays" min="1" max="7" value="2">
+            </div>
+          </div>
+          <div class="row mt-3">
+            <div class="col-md-6">
+              <div class="form-check"><input class="form-check-input" type="checkbox" id="schRunFetch" checked>
+                <label class="form-check-label small" for="schRunFetch">定时时同时重新抓取频道与 EPG</label></div>
+            </div>
+            <div class="col-md-6">
+              <div class="form-check"><input class="form-check-input" type="checkbox" id="schAtStartup">
+                <label class="form-check-label small" for="schAtStartup">服务启动后也自动整理一次</label></div>
+            </div>
+          </div>
+          <div class="mt-3 d-flex gap-2 align-items-center">
+            <button id="btnSaveSchedule" class="btn btn-success btn-sm">保存定时设置</button>
+            <span id="scheduleMsg" class="hint"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">整理设置</div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label small">udpxy / 组播代理地址（内网）</label>
+              <input class="form-control form-control-sm" id="cfgUdpxy" placeholder="http://192.168.x.x:4022">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small">预设</label>
+              <select class="form-select form-select-sm" id="cfgPreset">
+                <option value="">全部频道</option>
+                <option value="lean">lean · 精简</option>
+                <option value="core">core · 核心</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small">列表名称</label>
+              <input class="form-control form-control-sm" id="cfgListName">
+            </div>
+          </div>
+          <div class="row g-3 mt-1 align-items-end">
+            <div class="col-md-8">
+              <label class="form-label small">排除关键字（逗号分隔，留空不排除）</label>
+              <input class="form-control form-control-sm" id="cfgExclude" placeholder="例如：4K,慢直播,购物">
+            </div>
+            <div class="col-md-4">
+              <div class="form-check mt-3"><input class="form-check-input" type="checkbox" id="cfgAlias" checked>
+                <label class="form-check-label small" for="cfgAlias">同时生成 .m3u 文件名副本</label></div>
+            </div>
+          </div>
+          <div class="mt-3 d-flex gap-2 align-items-center">
+            <button id="btnSaveOrg" class="btn btn-success btn-sm">保存整理设置</button>
+            <span class="hint">保存后点「立即整理」生效</span><span id="orgMsg" class="hint"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-5">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span>运行日志</span><button class="btn btn-sm btn-outline-secondary" id="btnClearLog">清屏</button>
+        </div>
+        <div class="card-body"><div id="logBox"></div></div>
+      </div>
+      <div class="card">
+        <div class="card-header">内网访问地址</div>
+        <div class="card-body small">
+          <div class="mb-2">控制台：<span class="mono" id="urlHome">-</span></div>
+          <div class="mb-2">订阅中心：<span class="mono" id="urlIndex">-</span></div>
+          <div class="mb-2">APTV：<span class="mono" id="urlAptv">-</span></div>
+          <div class="mb-2">KODI：<span class="mono" id="urlKodi">-</span></div>
+          <div class="mb-2">EPG：<span class="mono" id="urlEpg">-</span></div>
+          <div>台标：<span class="mono" id="urlLogo">-</span></div>
+          <hr>
+          <p class="hint mb-0">以上地址会随你访问时用的内网 IP / 域名自动变化；台标由本服务的 <span class="mono">/logo/</span> 提供，不请求任何外部地址。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <span>输出文件 · <span id="fileSummary" class="fw-normal text-secondary">尚未整理</span></span>
+      <div class="d-flex gap-2">
+        <button class="btn btn-sm btn-outline-primary" id="btnCopyNames">复制全部 m3u 文件名</button>
+        <button class="btn btn-sm btn-outline-secondary" id="btnRefreshFiles">刷新</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div id="playlistNames" class="mb-3 p-2 bg-light rounded mono small"></div>
+      <div class="table-responsive">
+        <table class="table table-hover table-sm mb-0">
+          <thead><tr><th>文件名</th><th>类型</th><th>大小</th><th>更新时间</th><th>操作</th></tr></thead>
+          <tbody id="fileRows"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">频道预览（共 {{ channel_total }} 个，显示前 {{ channels|length }} 个）</div>
+    <div class="card-body">
+      <details><summary class="small">展开查看</summary>
+        <div class="table-responsive mt-2">
+          <table class="table table-sm table-striped">
+            <thead><tr><th>频道</th><th>时移源</th><th>组播代理</th></tr></thead>
+            <tbody>{% for c in channels %}<tr><td>{{ c.name }}</td><td class="mono small">{{ c.rtsp_url }}</td><td class="mono small">{{ c.multicast_url }}</td></tr>{% endfor %}</tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const origin = location.origin;
+let logSeq = 0, wasRunning = false, lastFinished = '';
+
+function setUrls(){
+  $('hostText').textContent = origin;
+  $('urlHome').textContent = origin + '/';
+  $('urlIndex').textContent = origin + '/playlists/';
+  $('urlAptv').textContent = origin + '/playlists/hbtv_aptv.m3u';
+  $('urlKodi').textContent = origin + '/playlists/hbtv_kodi.m3u';
+  $('urlEpg').textContent = origin + '/playlists/epg.xml';
+  $('urlLogo').textContent = origin + '/logo/';
+}
+function alertBox(msg, kind){
+  $('alertBox').innerHTML = '<div class="alert alert-' + kind + ' alert-dismissible fade show" style="white-space:pre-wrap">' + esc(msg) + '</div>';
+  setTimeout(() => { const a = $('alertBox').firstElementChild; if (a) a.remove(); }, 9000);
+}
+function copy(text){
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => alertBox('已复制：' + text, 'success'),
+      () => prompt('复制地址：', text));
+  } else prompt('复制地址：', text);
+}
+function appendLogs(items){
+  const box = $('logBox');
+  for (const l of items){
+    const d = document.createElement('div');
+    d.className = l.level || 'info';
+    d.textContent = '[' + l.t + '] ' + l.text;
+    box.appendChild(d);
+  }
+  if (items.length) box.scrollTop = box.scrollHeight;
+}
+async function pollLogs(){
+  try{
+    const r = await fetch('/api/logs?since=' + logSeq).then(x => x.json());
+    if (Array.isArray(r.logs)) appendLogs(r.logs);
+    logSeq = r.seq;
+  }catch(e){}
+}
+async function loadFiles(){
+  try{
+    const d = await fetch('/api/files').then(x => x.json());
+    const rows = $('fileRows');
+    rows.innerHTML = '';
+    const pls = d.files.filter(f => f.is_playlist);
+    $('playlistNames').textContent = pls.length
+      ? '播放列表文件名（' + pls.length + '）：' + pls.map(f => f.name).join('  ·  ')
+      : '暂无播放列表，请先点「立即整理」';
+    const m = d.manifest || {};
+    $('fileSummary').textContent = m.generated_at
+      ? '上次整理 ' + m.generated_at + ' · ' + m.channel_count + ' 频道 · ' + (m.epg_programmes || 0) + ' 条节目'
+      : '共 ' + d.count + ' 个文件';
+    for (const f of d.files){
+      const tr = document.createElement('tr');
+      const badge = f.is_playlist ? 'badge-m3u' : 'badge-other';
+      tr.innerHTML = '<td class="file-name">' + esc(f.name) + '</td>' +
+        '<td><span class="badge ' + badge + '">' + esc(f.kind || 'file') + '</span></td>' +
+        '<td>' + (f.size / 1024).toFixed(1) + ' KiB</td><td class="small">' + esc(f.mtime) + '</td>' +
+        '<td><a class="btn btn-sm btn-outline-primary" target="_blank" href="' + esc(f.url) + '">打开</a> ' +
+        '<button class="btn btn-sm btn-outline-secondary copy-url" data-url="' + esc(f.url) + '">复制地址</button></td>';
+      rows.appendChild(tr);
+    }
+    rows.querySelectorAll('.copy-url').forEach(b => b.onclick = () => copy(origin + b.dataset.url));
+    window._playlistNames = pls.map(f => f.name);
+  }catch(e){}
+}
+async function refresh(){
+  try{
+    const s = await fetch('/api/status').then(x => x.json());
+    const badge = $('jobBadge');
+    badge.textContent = s.running ? (s.mode === 'full' ? '抓取并整理中…' : '整理中…') : '空闲';
+    badge.className = 'badge ' + (s.running ? 'bg-warning text-dark' : (s.ok === false ? 'bg-danger' : (s.ok === true ? 'bg-success' : 'bg-secondary')));
+    $('btnOrganize').disabled = s.running;
+    $('btnFull').disabled = s.running;
+    $('lastRun').textContent = s.finished_at || '-';
+    $('thisRun').textContent = s.started_at ? s.started_at + '（' + (s.trigger === 'schedule' ? '定时' : '手动') + '）' : '-';
+    $('lastOk').textContent = s.ok === true ? '成功' : (s.ok === false ? '失败：' + (s.error || '') : '-');
+    $('nextRun').textContent = s.next_run || '未启用';
+    if (wasRunning && !s.running && s.finished_at !== lastFinished){
+      lastFinished = s.finished_at;
+      await loadFiles();
+      if (s.ok === true) {
+        const names = (s.last_result || {}).playlists || [];
+        alertBox('整理完成！共生成 ' + names.length + ' 个播放列表文件：\n' + names.join('   ') + '\n\n完整清单与订阅地址见下方「输出文件」。', 'success');
+      } else alertBox('整理失败：' + (s.error || '查看日志'), 'danger');
+    }
+    wasRunning = s.running;
+  }catch(e){}
+  await pollLogs();
+}
+async function loadSchedule(){
+  const d = await fetch('/api/schedule').then(x => x.json());
+  const s = d.schedule || {};
+  $('schEnabled').checked = !!s.enabled;
+  $('schMode').value = s.mode || 'interval';
+  $('schInterval').value = s.interval_minutes || 360;
+  $('schDaily').value = s.daily_time || '04:30';
+  $('schEpgDays').value = s.epg_days || 2;
+  $('schRunFetch').checked = s.run_fetch !== false;
+  $('schAtStartup').checked = !!s.run_at_startup;
+  toggleMode();
+}
+async function loadOrgCfg(){
+  const c = await fetch('/api/organize_config').then(x => x.json());
+  $('cfgUdpxy').value = c.udpxy || '';
+  $('cfgPreset').value = c.preset || '';
+  $('cfgListName').value = c.list_name || '';
+  $('cfgExclude').value = (c.exclude_keywords || []).join(',');
+  $('cfgAlias').checked = c.write_m3u_alias !== false;
+}
+function toggleMode(){
+  const daily = $('schMode').value === 'daily';
+  $('boxDaily').style.display = daily ? '' : 'none';
+  $('boxInterval').style.display = daily ? 'none' : '';
+}
+$('schMode').onchange = toggleMode;
+async function startJob(mode){
+  try{
+    const r = await fetch('/api/job/start', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({mode: mode})}).then(x => x.json());
+    if (!r.success) alertBox(r.message, 'warning');
+    else { $('alertBox').innerHTML = ''; setTimeout(refresh, 200); }
+  }catch(e){ alertBox('请求失败：' + e, 'danger'); }
+}
+$('btnOrganize').onclick = () => startJob('organize');
+$('btnFull').onclick = () => startJob('full');
+$('btnRefreshFiles').onclick = loadFiles;
+$('btnClearLog').onclick = () => { $('logBox').innerHTML = ''; };
+$('btnCopyNames').onclick = () => copy((window._playlistNames || []).join('\n'));
+$('btnSaveSchedule').onclick = async () => {
+  const body = {
+    enabled: $('schEnabled').checked, mode: $('schMode').value,
+    interval_minutes: parseInt($('schInterval').value, 10),
+    daily_time: $('schDaily').value, epg_days: parseInt($('schEpgDays').value, 10),
+    run_fetch: $('schRunFetch').checked, run_at_startup: $('schAtStartup').checked
+  };
+  const r = await fetch('/api/schedule', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(body)}).then(x => x.json());
+  $('scheduleMsg').textContent = r.success ? '已保存，' + new Date().toLocaleTimeString() : ('失败：' + r.message);
+  if (r.success) refresh();
+};
+$('btnSaveOrg').onclick = async () => {
+  const body = {
+    udpxy: $('cfgUdpxy').value.trim(), preset: $('cfgPreset').value,
+    list_name: $('cfgListName').value.trim(), exclude_keywords: $('cfgExclude').value,
+    write_m3u_alias: $('cfgAlias').checked
+  };
+  const r = await fetch('/api/organize_config', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(body)}).then(x => x.json());
+  $('orgMsg').textContent = r.success ? '已保存' : ('失败：' + r.message);
+};
+setUrls();
+loadSchedule(); loadOrgCfg(); loadFiles(); refresh();
+setInterval(refresh, 1500);
+</script>
+</body>
+</html>
