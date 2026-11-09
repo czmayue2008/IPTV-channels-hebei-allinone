@@ -13,10 +13,15 @@ venv.bak/
 .vscode/
 *.log
 
-# 真实机顶盒凭据（严禁入库）
+# 真实机顶盒凭据 / 登录密码（严禁入库）
 config.json
 config.local.json
 config/*.local.json
+config/auth.json
+auth.json
+*.secret
+*.secret_key
+*.tmp
 
 # 抓取产物与整理产物（含内网地址、回看凭据，严禁入库）
 output/*

@@ -109,8 +109,8 @@
   "include_keywords": [],
   "preset": "",
   "proxy": {
-    "_note": "rtp2httpd 留空表示沿用源文件地址；udpxy 填你自己的内网组播代理地址。全部为内网地址，运行时不访问任何外部服务。",
-    "rtp2httpd": "",
+    "_note": "rtp2httpd 填你自己的内网组播代理地址（直播与回看地址一起替换）；留空表示沿用源文件地址。udpxy 同理。全部为内网地址，运行时不访问任何外部服务。",
+    "rtp2httpd": "http://192.168.123.2:5140",
     "udpxy": "http://127.0.0.1:4022",
     "rtsp_proxy": "",
     "r2h_token": ""
@@ -118,6 +118,13 @@
   "fcc": "",
   "keep_fec": true,
   "catchup_days_default": 1,
+  "_catchup_override_note": "catchup-days 覆盖值：默认跟随 EPG 回看窗口（7 天）；填 0 则按每个频道时移源 r2h-seek-mode=range(秒) 的实际能力（河北实测多为 3 天或 2 小时）。",
+  "catchup_days_override": 7,
+  "_catchup_clean_note": "精简回看地址：源 m3u 的 catchup-source 带 rrsip/accountinfo/it/r2h-seek-mode 等机顶盒票据与 3 天限制参数，默认全部丢弃，只留 <base>.smil?playseek=时间模板（实测可看 7 天回放）。设 false 可保留原始完整参数。",
+  "catchup_clean": true,
+  "catchup_keep_params": [
+    "r2h-token"
+  ],
   "write_m3u_alias": true,
   "formats": [
     "kodi",
@@ -129,13 +136,15 @@
     "simple"
   ],
   "schedule": {
-    "_about": "定时整理：enabled 开关；mode=interval 按分钟间隔，mode=daily 每天固定时间；run_fetch=true 时先重新抓取频道与 EPG 再整理。",
+    "_about": "定时整理：enabled 开关；mode=interval 按分钟间隔，mode=daily 每天固定时间；run_fetch=true 时先重新抓取频道与 EPG 再整理。epg_window 开启滑动窗口（按天归档、删最旧顺延一天），epg_days=未来天数，epg_past_days=回看历史天数。",
     "enabled": false,
     "mode": "interval",
     "interval_minutes": 360,
     "daily_time": "04:30",
     "run_fetch": true,
-    "epg_days": 2,
+    "epg_window": true,
+    "epg_days": 3,
+    "epg_past_days": 7,
     "run_at_startup": false
   }
 }

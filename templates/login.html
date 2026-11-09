@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% if initialized %}登录{% else %}初始化{% endif %} · HBTV All-in-One</title>
+<link href="/static/css/bootstrap.min.css" rel="stylesheet">
+<link href="/static/css/app.css" rel="stylesheet">
+<script src="/static/js/theme.js" defer></script>
+</head>
+<body class="auth-page">
+<div class="auth-shell">
+  <div class="auth-brand">
+    <div class="brand-mark">&#9654;</div>
+    <h1>HBTV All-in-One</h1>
+    <p>河北电信 IPTV · 抓取 / 整理 / 多格式订阅 · 纯内网</p>
+  </div>
+
+  <div class="auth-card">
+    {% if initialized %}
+      <h2>登录控制台</h2>
+      <div class="sub">请输入管理员密码，登录后 {{ session_days }} 天内免重复登录。</div>
+      <form id="authForm" autocomplete="on">
+        <div class="mb-3">
+          <label class="form-label small" for="pw">管理员密码</label>
+          <div class="pw-wrap">
+            <input type="password" class="form-control" id="pw" name="password"
+                   placeholder="请输入密码" autocomplete="current-password" required autofocus>
+            <button type="button" class="pw-toggle" data-pw-toggle>显示</button>
+          </div>
+        </div>
+        <div class="form-check mb-3">
+          <input class="form-check-input" type="checkbox" id="remember" checked>
+          <label class="form-check-label small" for="remember">记住登录状态（{{ session_days }} 天）</label>
+        </div>
+        <button type="submit" class="btn btn-primary" id="submitBtn">登 录</button>
+        <div class="auth-msg" id="msg"></div>
+      </form>
+      <div class="auth-foot">
+        密码保存在服务器本地 <code>config/auth.json</code>，不会进入公开仓库或镜像。<br>
+        忘记密码：删除该文件后重启服务，重新设置即可。<br>
+        播放列表 / 台标 / EPG 默认无需登录，供局域网播放器直接订阅。
+      </div>
+    {% else %}
+      <h2>首次使用 · 设置管理员密码</h2>
+      <div class="sub">设置后，控制台、机顶盒配置与所有管理操作都需要登录。</div>
+      <form id="authForm" autocomplete="off">
+        <div class="mb-3">
+          <label class="form-label small" for="pw">设置密码（至少 8 位）</label>
+          <div class="pw-wrap">
+            <input type="password" class="form-control" id="pw" name="password"
+                   placeholder="至少 8 位，建议包含字母与数字" autocomplete="new-password" required autofocus>
+            <button type="button" class="pw-toggle" data-pw-toggle>显示</button>
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label small" for="pw2">确认密码</label>
+          <input type="password" class="form-control" id="pw2" name="password2"
+                 placeholder="再输入一次" autocomplete="new-password" required>
+        </div>
+        <button type="submit" class="btn btn-primary" id="submitBtn">设置密码并进入控制台</button>
+        <div class="auth-msg" id="msg"></div>
+      </form>
+      <div class="auth-foot">
+        这是首次启动，尚未设置任何密码。密码只保存在服务器本地
+        <code>config/auth.json</code>（哈希存储），不进仓库、不进镜像。<br>
+        容器部署可用 <code>HBTV_PASSWORD</code> 环境变量预设，跳过本页。<br>
+        播放器订阅默认无需登录；设置完成后可在控制台「安全设置」里开启订阅令牌保护。
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="auth-theme">
+    <button type="button" data-theme-toggle>切换<span data-theme-label>深色</span>主题</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  var initialized = {{ 'true' if initialized else 'false' }};
+  var nextUrl = {{ next_url|tojson }};
+  var form = document.getElementById('authForm');
+  var btn = document.getElementById('submitBtn');
+  var msg = document.getElementById('msg');
+
+  document.querySelectorAll('[data-pw-toggle]').forEach(function(b){
+    b.addEventListener('click', function(){
+      var input = b.parentNode.querySelector('input');
+      var show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      b.textContent = show ? '隐藏' : '显示';
+      input.focus();
+    });
+  });
+
+  form.addEventListener('submit', async function(e){
+    e.preventDefault();
+    msg.className = 'auth-msg';
+    msg.textContent = '';
+    btn.disabled = true;
+    var body = { password: document.getElementById('pw').value };
+    var url = '/api/auth/login';
+    if (initialized) {
+      body.remember = document.getElementById('remember').checked;
+    } else {
+      body.password2 = document.getElementById('pw2').value;
+      url = '/api/auth/setup';
+    }
+    try {
+      var r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                 body: JSON.stringify(body) });
+      var d = await r.json();
+      if (r.ok && d.success) {
+        msg.className = 'auth-msg ok';
+        msg.textContent = d.message + '，正在进入…';
+        location.href = nextUrl || '/';
+      } else {
+        msg.className = 'auth-msg err';
+        msg.textContent = d.message || '操作失败';
+        btn.disabled = false;
+      }
+    } catch (err) {
+      msg.className = 'auth-msg err';
+      msg.textContent = '请求失败：' + err;
+      btn.disabled = false;
+    }
+  });
+})();
+</script>
+</body>
+</html>

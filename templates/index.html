@@ -5,30 +5,27 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>HBTV All-in-One · 内网控制台</title>
 <link href="/static/css/bootstrap.min.css" rel="stylesheet">
-<style>
-body{background:#f5f7fa;padding-bottom:40px}
-.topbar{background:#0f172a;color:#fff;padding:14px 0 12px;margin-bottom:20px}
-.topbar h1{font-size:20px;margin:0}
-.topbar a{color:#93c5fd;text-decoration:none}
-.mono{font-family:Consolas,"Courier New",monospace}
-.card{border:0;box-shadow:0 1px 3px rgba(15,23,42,.08);border-radius:10px;margin-bottom:16px}
-.card-header{background:#fff;border-bottom:1px solid #eef0f4;font-weight:600;padding:12px 16px}
-#logBox{height:230px;overflow-y:auto;background:#0f172a;color:#cbd5e1;border-radius:8px;padding:12px;font:12px/1.65 Consolas,monospace}
-#logBox .ok{color:#86efac}#logBox .error{color:#fca5a5}#logBox .warn{color:#fcd34d}
-.file-name{font-family:Consolas,monospace;font-weight:600}
-.badge-m3u{background:#dbeafe;color:#1d4ed8}
-.badge-other{background:#e5e7eb;color:#4b5563}
-table{font-size:14px}td,th{vertical-align:middle!important}
-.hint{font-size:13px;color:#64748b}
-</style>
+<link href="/static/css/app.css" rel="stylesheet">
+<script src="/static/js/theme.js" defer></script>
 </head>
 <body>
 <div class="topbar">
-  <div class="container d-flex flex-wrap justify-content-between align-items-center gap-2">
-    <div><h1>HBTV All-in-One · 河北电信 IPTV</h1><div class="small text-secondary">抓取 + 整理 + 多格式订阅 · 纯内网运行，零外部请求</div></div>
-    <div class="small">
-      本机访问：<span class="mono" id="hostText">-</span><br>
-      <a href="/playlists/" target="_blank">订阅中心</a> · <a href="/config">机顶盒配置</a> · <a href="/health" target="_blank">健康检查</a>
+  <div class="container topbar-inner">
+    <div class="brand">
+      <div class="brand-mark">&#9654;</div>
+      <div>
+        <h1>HBTV <span>All-in-One</span></h1>
+        <div class="brand-sub">河北电信 IPTV · 抓取 / 整理 / 多格式订阅 · 纯内网，零外部请求</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <span class="host-chip">本机 <span class="mono" id="hostText">-</span></span>
+      <a class="nav-pill" href="/playlists/" target="_blank">订阅中心</a>
+      <a class="nav-pill" href="/config">机顶盒配置</a>
+      <a class="nav-pill" href="/health" target="_blank">健康检查</a>
+      <button class="nav-pill" type="button" data-theme-toggle title="切换深浅色">&#9680; <span data-theme-label>深色</span></button>
+      <span class="nav-pill user-pill">&#9672; admin</span>
+      <a class="nav-pill logout" href="/logout">退出</a>
     </div>
   </div>
 </div>
@@ -36,6 +33,13 @@ table{font-size:14px}td,th{vertical-align:middle!important}
 <div class="container">
 
   <div id="alertBox"></div>
+
+  <div class="stat-grid">
+    <div class="stat-box"><b>{{ channel_total }}</b><span>频道</span></div>
+    <div class="stat-box"><b id="statProgrammes">-</b><span>EPG 节目</span></div>
+    <div class="stat-box"><b id="statPlaylists">-</b><span>播放列表文件</span></div>
+    <div class="stat-box"><b id="statJob">空闲</b><span>任务状态</span></div>
+  </div>
 
   <div class="row g-3">
     <div class="col-lg-7">
@@ -84,9 +88,21 @@ table{font-size:14px}td,th{vertical-align:middle!important}
               <input type="time" class="form-control form-control-sm" id="schDaily" value="04:30">
             </div>
             <div class="col-md-3">
-              <label class="form-label small">EPG 天数</label>
-              <input type="number" class="form-control form-control-sm" id="schEpgDays" min="1" max="7" value="2">
-              <div class="hint mt-1">手动「抓取并整理」与定时抓取都用这个值；运营商通常只给 4~5 天，超出按实际可用天数抓取</div>
+              <label class="form-label small">未来天数</label>
+              <input type="number" class="form-control form-control-sm" id="schEpgDays" min="1" max="7" value="3">
+              <div class="hint mt-1">今天之后的节目单天数；手动「抓取并整理」与定时抓取共用</div>
+            </div>
+          </div>
+          <div class="row mt-3 g-3 align-items-end">
+            <div class="col-md-3">
+              <label class="form-label small">回看天数（过去）</label>
+              <input type="number" class="form-control form-control-sm" id="schPastDays" min="0" max="14" value="7">
+              <div class="hint mt-1">0 表示不保留历史节目单</div>
+            </div>
+            <div class="col-md-9">
+              <div class="form-check"><input class="form-check-input" type="checkbox" id="schEpgWindow" checked>
+                <label class="form-check-label small" for="schEpgWindow">启用 EPG 滑动窗口：按天归档，每次更新自动删除最旧一天、顺延保留新一天</label></div>
+              <div class="hint mt-1">窗口 = 过去 7 天 + 今天 + 未来 3 天（共 11 天）。历史只读本地归档，首次补齐历史约需 3~4 分钟；关闭窗口则退回「只抓未来 N 天」</div>
             </div>
           </div>
           <div class="row mt-3">
@@ -162,7 +178,37 @@ table{font-size:14px}td,th{vertical-align:middle!important}
           <div class="mb-2">EPG：<span class="mono" id="urlEpg">-</span></div>
           <div>台标：<span class="mono" id="urlLogo">-</span></div>
           <hr>
-          <p class="hint mb-0">以上地址会随你访问时用的内网 IP / 域名自动变化；台标由本服务的 <span class="mono">/logo/</span> 提供，不请求任何外部地址。</p>
+          <p class="hint mb-0">以上地址会随你访问时用的内网 IP / 域名自动变化；开启订阅令牌保护后会自动附带 <span class="mono">?token=…</span>。台标由本服务的 <span class="mono">/logo/</span> 提供，不请求任何外部地址。</p>
+        </div>
+      </div>
+
+      <div class="card" id="securityCard">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span>安全设置</span><span class="badge badge-m3u">已登录</span>
+        </div>
+        <div class="card-body">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="secProtectMedia">
+            <label class="form-check-label small" for="secProtectMedia">订阅令牌保护（播放列表 / 台标 / EPG 也需令牌）</label>
+          </div>
+          <div class="hint mt-2">默认关闭，播放器可直接订阅；开启后必须从下方或控制台复制<b>带令牌</b>的完整地址。</div>
+          <div class="mt-2 p-2 rounded bg-light small mono" style="word-break:break-all" id="secToken">-</div>
+          <div class="d-flex flex-wrap gap-2 mt-2">
+            <button class="btn btn-sm btn-primary" id="btnSaveMedia">保存开关</button>
+            <button class="btn btn-sm btn-outline-secondary" id="btnRotateToken">重置令牌</button>
+            <button class="btn btn-sm btn-outline-primary" id="btnCopyAptv">复制带令牌的 APTV 地址</button>
+          </div>
+          <hr>
+          <div class="small fw-semibold mb-2">修改登录密码</div>
+          <div class="row g-2">
+            <div class="col-12"><input type="password" class="form-control form-control-sm" id="secOldPw" placeholder="原密码" autocomplete="current-password"></div>
+            <div class="col-md-6"><input type="password" class="form-control form-control-sm" id="secNewPw" placeholder="新密码（至少 8 位）" autocomplete="new-password"></div>
+            <div class="col-md-6"><input type="password" class="form-control form-control-sm" id="secNewPw2" placeholder="确认新密码" autocomplete="new-password"></div>
+          </div>
+          <div class="d-flex flex-wrap gap-2 align-items-center mt-2">
+            <button class="btn btn-sm btn-outline-primary" id="btnChangePw">修改密码</button>
+            <span class="hint mb-0" id="secMsg"></span>
+          </div>
         </div>
       </div>
     </div>
@@ -207,15 +253,22 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const origin = location.origin;
 let logSeq = 0, wasRunning = false, lastFinished = '';
+let SUB_TOKEN = '';
 
+// 开启订阅令牌保护时，所有展示 / 复制 / 打开的订阅地址都自动带上令牌
+function subUrl(p){
+  return origin + p + (SUB_TOKEN
+    ? (p.indexOf('?') >= 0 ? '&' : '?') + 'token=' + encodeURIComponent(SUB_TOKEN)
+    : '');
+}
 function setUrls(){
   $('hostText').textContent = origin;
   $('urlHome').textContent = origin + '/';
-  $('urlIndex').textContent = origin + '/playlists/';
-  $('urlAptv').textContent = origin + '/playlists/hbtv_aptv.m3u';
-  $('urlKodi').textContent = origin + '/playlists/hbtv_kodi.m3u';
-  $('urlEpg').textContent = origin + '/playlists/epg.xml';
-  $('urlLogo').textContent = origin + '/logo/';
+  $('urlIndex').textContent = subUrl('/playlists/');
+  $('urlAptv').textContent = subUrl('/playlists/hbtv_aptv.m3u');
+  $('urlKodi').textContent = subUrl('/playlists/hbtv_kodi.m3u');
+  $('urlEpg').textContent = subUrl('/playlists/epg.xml');
+  $('urlLogo').textContent = subUrl('/logo/');
 }
 function alertBox(msg, kind){
   $('alertBox').innerHTML = '<div class="alert alert-' + kind + ' alert-dismissible fade show" style="white-space:pre-wrap">' + esc(msg) + '</div>';
@@ -254,6 +307,9 @@ async function loadFiles(){
       ? '播放列表文件名（' + pls.length + '）：' + pls.map(f => f.name).join('  ·  ')
       : '暂无播放列表，请先点「立即整理」';
     const m = d.manifest || {};
+    $('statPlaylists').textContent = pls.length;
+    $('statProgrammes').textContent = m.epg_programmes
+      ? Number(m.epg_programmes).toLocaleString('zh-CN') : '-';
     $('fileSummary').textContent = m.generated_at
       ? '上次整理 ' + m.generated_at + ' · ' + m.channel_count + ' 频道 · ' + (m.epg_programmes || 0) + ' 条节目'
       : '共 ' + d.count + ' 个文件';
@@ -263,11 +319,11 @@ async function loadFiles(){
       tr.innerHTML = '<td class="file-name">' + esc(f.name) + '</td>' +
         '<td><span class="badge ' + badge + '">' + esc(f.kind || 'file') + '</span></td>' +
         '<td>' + (f.size / 1024).toFixed(1) + ' KiB</td><td class="small">' + esc(f.mtime) + '</td>' +
-        '<td><a class="btn btn-sm btn-outline-primary" target="_blank" href="' + esc(f.url) + '">打开</a> ' +
+        '<td><a class="btn btn-sm btn-outline-primary" target="_blank" href="' + esc(subUrl(f.url)) + '">打开</a> ' +
         '<button class="btn btn-sm btn-outline-secondary copy-url" data-url="' + esc(f.url) + '">复制地址</button></td>';
       rows.appendChild(tr);
     }
-    rows.querySelectorAll('.copy-url').forEach(b => b.onclick = () => copy(origin + b.dataset.url));
+    rows.querySelectorAll('.copy-url').forEach(b => b.onclick = () => copy(subUrl(b.dataset.url)));
     window._playlistNames = pls.map(f => f.name);
   }catch(e){}
 }
@@ -277,6 +333,7 @@ async function refresh(){
     const badge = $('jobBadge');
     badge.textContent = s.running ? (s.mode === 'full' ? '抓取并整理中…' : '整理中…') : '空闲';
     badge.className = 'badge ' + (s.running ? 'bg-warning text-dark' : (s.ok === false ? 'bg-danger' : (s.ok === true ? 'bg-success' : 'bg-secondary')));
+    $('statJob').textContent = badge.textContent;
     $('btnOrganize').disabled = s.running;
     $('btnFull').disabled = s.running;
     $('lastRun').textContent = s.finished_at || '-';
@@ -302,7 +359,9 @@ async function loadSchedule(){
   $('schMode').value = s.mode || 'interval';
   $('schInterval').value = s.interval_minutes || 360;
   $('schDaily').value = s.daily_time || '04:30';
-  $('schEpgDays').value = s.epg_days || 2;
+  $('schEpgDays').value = s.epg_days || 3;
+  $('schPastDays').value = (s.epg_past_days === 0 || s.epg_past_days) ? s.epg_past_days : 7;
+  $('schEpgWindow').checked = s.epg_window !== false;
   $('schRunFetch').checked = s.run_fetch !== false;
   $('schAtStartup').checked = !!s.run_at_startup;
   toggleMode();
@@ -324,8 +383,12 @@ $('schMode').onchange = toggleMode;
 async function startJob(mode){
   try{
     const body = {mode: mode};
-    // 「抓取并整理」直接采用页面上填的 EPG 天数，不必先保存定时设置
-    if (mode === 'full') body.epg_days = parseInt($('schEpgDays').value, 10) || 2;
+    // 「抓取并整理」直接采用页面上填的未来/回看天数，不必先保存定时设置
+    if (mode === 'full') {
+      body.epg_days = parseInt($('schEpgDays').value, 10) || 3;
+      body.epg_past_days = parseInt($('schPastDays').value, 10) || 0;
+      body.epg_window = $('schEpgWindow').checked;
+    }
     const r = await fetch('/api/job/start', {method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify(body)}).then(x => x.json());
     if (!r.success) alertBox(r.message, 'warning');
@@ -342,6 +405,8 @@ $('btnSaveSchedule').onclick = async () => {
     enabled: $('schEnabled').checked, mode: $('schMode').value,
     interval_minutes: parseInt($('schInterval').value, 10),
     daily_time: $('schDaily').value, epg_days: parseInt($('schEpgDays').value, 10),
+    epg_past_days: parseInt($('schPastDays').value, 10) || 0,
+    epg_window: $('schEpgWindow').checked,
     run_fetch: $('schRunFetch').checked, run_at_startup: $('schAtStartup').checked
   };
   const r = await fetch('/api/schedule', {method:'POST', headers:{'Content-Type':'application/json'},
@@ -359,8 +424,46 @@ $('btnSaveOrg').onclick = async () => {
     body: JSON.stringify(body)}).then(x => x.json());
   $('orgMsg').textContent = r.success ? '已保存' : ('失败：' + r.message);
 };
+function secMsg(text, ok){
+  $('secMsg').textContent = text;
+  $('secMsg').style.color = ok ? 'var(--ok)' : 'var(--danger)';
+}
+async function initAuth(){
+  try{
+    const a = await fetch('/api/auth/status').then(x => x.json());
+    SUB_TOKEN = a.subscribe_token || '';
+    $('secProtectMedia').checked = !!a.protect_media;
+    $('secToken').textContent = SUB_TOKEN ? '?token=' + SUB_TOKEN : '（未开启订阅令牌保护）';
+    setUrls(); loadFiles();
+  }catch(e){}
+}
+$('btnSaveMedia').onclick = async () => {
+  const on = $('secProtectMedia').checked;
+  const r = await fetch('/api/auth/media', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({protect_media: on})}).then(x => x.json());
+  secMsg(r.success ? '已保存' : ('失败：' + r.message), !!r.success);
+  if(r.success){
+    await initAuth();
+    alertBox(on ? '订阅令牌保护已开启，请复制带令牌的新地址给播放器' : '订阅令牌保护已关闭，播放器可直接订阅', 'success');
+  } else alertBox(r.message || '保存失败', 'danger');
+};
+$('btnRotateToken').onclick = async () => {
+  if(!confirm('重置后所有旧的带令牌订阅地址立即失效，确认继续？')) return;
+  const r = await fetch('/api/auth/token/rotate', {method:'POST'}).then(x => x.json());
+  secMsg(r.success ? '令牌已重置' : ('失败：' + r.message), !!r.success);
+  if(r.success) await initAuth();
+};
+$('btnCopyAptv').onclick = () => copy(subUrl('/playlists/hbtv_aptv.m3u'));
+$('btnChangePw').onclick = async () => {
+  const body = {old_password: $('secOldPw').value, new_password: $('secNewPw').value,
+                new_password2: $('secNewPw2').value};
+  const r = await fetch('/api/auth/password', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(body)}).then(x => x.json());
+  secMsg(r.success ? '密码已修改，当前会话保持有效' : ('失败：' + r.message), !!r.success);
+  if(r.success){ $('secOldPw').value=''; $('secNewPw').value=''; $('secNewPw2').value=''; }
+};
 setUrls();
-loadSchedule(); loadOrgCfg(); loadFiles(); refresh();
+loadSchedule(); loadOrgCfg(); loadFiles(); refresh(); initAuth();
 setInterval(refresh, 1500);
 </script>
 </body>

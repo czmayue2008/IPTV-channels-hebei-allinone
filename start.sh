@@ -21,4 +21,10 @@ if [ ! -f config/config.json ]; then
   fi
 fi
 
+if [ -n "$HBTV_PASSWORD" ]; then
+  echo "[start.sh] 检测到 HBTV_PASSWORD，将用它初始化管理员密码"
+else
+  echo "[start.sh] 首次访问 http://<内网IP>:5000/login 设置管理员密码（密码存于 config/auth.json）"
+fi
+
 exec python app.py

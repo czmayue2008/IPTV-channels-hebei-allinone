@@ -87,8 +87,11 @@ def main_url(ch: Channel, cfg: dict, style: str) -> str:
     return url
 
 
-def catchup_url(ch: Channel, cfg: dict, seek: str) -> str:
+def catchup_base(ch: Channel, cfg: dict) -> str:
+    """时移源：应用代理替换与可选 r2h-token，尚未写入 playseek。"""
     url = ch.raw.catchup_source
+    if not url:
+        return ""
     proxy = cfg.get("proxy", {})
     if proxy.get("rtsp_proxy"):
         p = urlsplit(url)
@@ -97,9 +100,42 @@ def catchup_url(ch: Channel, cfg: dict, seek: str) -> str:
         if m:
             url = (proxy["rtsp_proxy"].rstrip("/") + "/rtsp/" + m.group(1)
                    + ("?" + p.query if p.query else ""))
+    elif proxy.get("rtp2httpd"):
+        # 与直播地址保持一致：配置了代理主机时，时移源也换到同一台内网代理
+        url = replace_origin(url, proxy["rtp2httpd"])
     if proxy.get("r2h_token"):
         url = _set_param(url, "r2h-token", proxy["r2h_token"])
-    return with_playseek(url, seek)
+    return url
+
+
+def prepare_catchup(url: str, cfg: dict, template: str) -> str:
+    """生成 catchup-source。
+
+    默认「精简模式」：丢掉机顶盒下发的 rrsip / zoneoffset / icpid / accountinfo /
+    it / r2h-seek-mode 等参数，只输出 <base>.smil?playseek=<播放器时间模板>。
+    实测这些参数里 accountinfo、it 是带时间戳的一次性票据（会过期），
+    r2h-seek-mode=range(259200) 还会把回看限制在 3 天；代理按 playseek 自行
+    回源，去掉后反而能正常看过去 7 天的回放。
+
+    cfg.catchup_clean = false 可恢复完整参数；cfg.catchup_keep_params 指定
+    精简时要保留的参数名（默认只保留代理认证 r2h-token）。
+    """
+    if not url:
+        return ""
+    if not cfg.get("catchup_clean", True):
+        return with_playseek(url, template)
+    base, _sep, query = url.partition("?")
+    keep = cfg.get("catchup_keep_params")
+    if keep is None:
+        keep = ["r2h-token"]
+    keep = {str(k) for k in keep}
+    parts = [p for p in query.split("&")
+             if p and p.split("=", 1)[0] in keep]
+    return base + "?" + "&".join(parts + ["playseek=" + template])
+
+
+def catchup_url(ch: Channel, cfg: dict, seek: str) -> str:
+    return prepare_catchup(catchup_base(ch, cfg), cfg, seek)
 
 
 def logo_url(ch: Channel, cfg: dict) -> str:
@@ -121,6 +157,21 @@ def _esc(v: str) -> str:
     return (v or "").replace('"', "%22").replace("\n", " ").strip()
 
 
+def catchup_days(ch: Channel, cfg: dict) -> int:
+    """回看天数：优先用配置覆盖值（跟随 EPG 回看窗口），否则按频道时移能力。
+
+    cfg.catchup_days_override > 0 时统一返回该值；设为 0 则按源播放列表里
+    r2h-seek-mode=range(秒) 换算出的实际可回看天数。
+    """
+    try:
+        override = int(cfg.get("catchup_days_override", 0) or 0)
+    except (TypeError, ValueError):
+        override = 0
+    if override > 0:
+        return override
+    return ch.catchup_days or int(cfg.get("catchup_days_default", 1) or 1)
+
+
 def extinf(ch: Channel, cfg: dict, *, style: str, seek: str = APTV_SEEK,
            kodi_prop: bool = False, catchup: bool = True) -> str:
     a = ['tvg-logo="%s"' % _esc(logo_url(ch, cfg)),
@@ -129,7 +180,7 @@ def extinf(ch: Channel, cfg: dict, *, style: str, seek: str = APTV_SEEK,
     if catchup and ch.raw.catchup_source:
         src = catchup_url(ch, cfg, seek)
         a += ['catchup="default"',
-              'catchup-days="%d"' % (ch.catchup_days or cfg.get("catchup_days_default", 1)),
+              'catchup-days="%d"' % catchup_days(ch, cfg),
               'catchup-source="%s"' % _esc(src)]
     a.append('group-title="%s"' % _esc(ch.group))
     line = "#EXTINF:-1 " + " ".join(a) + "," + ch.tvg_name + "\n"
@@ -159,7 +210,7 @@ def render_diyp(channels: list[Channel], cfg: dict) -> str:
         live = main_url(ch, cfg, "rtp2httpd")
         if ch.raw.catchup_source:
             # DIYP 约定：时移源在前，# 后为直播源
-            src = with_playseek(ch.raw.catchup_source, APTV_SEEK)
+            src = prepare_catchup(catchup_base(ch, cfg), cfg, APTV_SEEK)
             out.append("%s,%s#%s\n" % (ch.tvg_name, src, live))
         else:
             out.append("%s,%s\n" % (ch.tvg_name, live))
@@ -190,8 +241,8 @@ def render_channels_json(channels: list[Channel], cfg: dict) -> str:
             "multicast": c.raw.multicast,
             "fcc": c.raw.fcc,
             "fec": c.raw.fec,
-            "catchup_source": with_playseek(c.raw.catchup_source, APTV_SEEK),
-            "catchup_days": c.catchup_days,
+            "catchup_source": prepare_catchup(catchup_base(c, cfg), cfg, APTV_SEEK),
+            "catchup_days": catchup_days(c, cfg),
         } for c in channels],
     }
     return json.dumps(data, ensure_ascii=False, indent=2) + "\n"
@@ -275,23 +326,32 @@ def render_index(channels: list[Channel], cfg: dict, files: dict[str, str]) -> s
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>%s - 订阅中心</title>
 <style>
-body{font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;background:#f6f7f9;color:#1b1f24;margin:0;padding:28px}
-.wrap{max-width:1000px;margin:auto}
-h1{font-size:24px;margin:0 0 6px}h2{font-size:17px;margin:28px 0 10px}
-.muted{color:#6b7280;font-size:13px}
-.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+*{box-sizing:border-box}
+body{font-family:-apple-system,"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;background:#f3f6fc;color:#101828;margin:0;padding:0 20px 48px}
+.wrap{max-width:1040px;margin:auto}
+.hero{background:linear-gradient(115deg,#0b1220,#172554 55%%,#1d4ed8);color:#fff;padding:30px 24px 26px;margin:0 -20px 24px;box-shadow:0 8px 26px rgba(15,23,42,.2)}
+h1{font-size:23px;margin:0 0 6px;font-weight:700}
+h2{font-size:16px;margin:26px 0 12px;font-weight:650}
+.muted{color:#667085;font-size:13px;line-height:1.6}
+.hero .muted{color:#b9c9ea}
+.hero a{color:#bfdbfe}
+.card{background:#fff;border:1px solid #e5eaf3;border-radius:15px;padding:20px;box-shadow:0 2px 6px rgba(16,24,40,.04),0 12px 28px rgba(16,24,40,.05);margin-bottom:8px}
 table{width:100%%;border-collapse:collapse;font-size:14px}
-th,td{text-align:left;padding:10px 8px;border-bottom:1px solid #eef0f3;vertical-align:top}
-th{color:#6b7280;font-weight:600;font-size:13px}
-code{background:#f3f4f6;padding:2px 6px;border-radius:4px;font-size:13px}
-button{border:1px solid #d1d5db;background:#fff;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:12px}
-button:hover{background:#f3f4f6}
-.stat{display:flex;gap:26px;flex-wrap:wrap;margin:12px 0 0}
-.stat b{font-size:22px;display:block;color:#2563eb}
-pre{background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow:auto;font-size:12px}
-</style></head><body><div class="wrap">
+th,td{text-align:left;padding:11px 8px;border-bottom:1px solid #eef1f6;vertical-align:top}
+th{color:#667085;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.4px}
+tbody tr:hover{background:#f7f9fd}
+code{background:#eef2ff;color:#3730a3;padding:3px 7px;border-radius:6px;font-size:13px}
+button{border:1px solid #c7d2fe;background:#eef2ff;color:#3730a3;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:12px;font-weight:600;transition:all .18s}
+button:hover{background:#dfe6ff;transform:translateY(-1px)}
+.stat{display:flex;gap:34px;flex-wrap:wrap;margin:6px 0 0}
+.stat b{font-size:24px;display:block;color:#2563eb;line-height:1.2}
+pre{background:linear-gradient(180deg,#0d1526,#101c33);color:#cbd5e1;padding:15px;border-radius:11px;overflow:auto;font-size:12px;line-height:1.7}
+@media(max-width:600px){.hero{padding:22px}.stat{gap:18px}}
+</style></head><body>
+<div class="hero"><div class="wrap">
 <h1>%s · 订阅中心</h1>
 <div class="muted">由本项目整理层生成于 %s ｜ 数据源：本项目 output/ 抓取产物（只读）｜ 台标、EPG 与播放列表均由本服务在内网提供</div>
+</div></div><div class="wrap">
 <div class="card" style="margin-top:18px">
 <div class="stat"><div><b>%d</b><span class="muted">频道</span></div>
 <div><b>%d</b><span class="muted">分组</span></div>
@@ -313,7 +373,7 @@ pre{background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow:aut
 <p class="muted" style="margin-top:22px">台标文件随本项目存放在内网，不访问任何外部地址。播放地址与 EPG 仅在内网 IPTV 专网可用。</p>
 </div>
 <script>
-function cp(f){const u=new URL(f,location.href).href;navigator.clipboard&&navigator.clipboard.writeText(u).then(()=>alert('已复制：\\n'+u),()=>prompt('复制地址：',u))||prompt('复制地址：',u)}
+function cp(f){const tk=window.HBTV_TOKEN;let u=new URL(f,location.href).href;if(tk){u+=(u.indexOf('?')>=0?'&':'?')+'token='+encodeURIComponent(tk)}navigator.clipboard&&navigator.clipboard.writeText(u).then(()=>alert('已复制：\\n'+u),()=>prompt('复制地址：',u))||prompt('复制地址：',u)}
 </script></body></html>
 """ % (html.escape(cfg.get("list_name", "河北电信 IPTV")),
        html.escape(cfg.get("list_name", "河北电信 IPTV")), now_str(),

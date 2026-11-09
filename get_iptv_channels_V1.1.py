@@ -397,6 +397,184 @@ def detect_available_days(state, channels, today, requested):
     return max(1, good)
 
 
+def to_records(programs):
+    """[(频道名, playbillLite)] -> 可 JSON 化、可按日期归档的节目记录。"""
+    out = []
+    for name, p in programs:
+        if not isinstance(p, dict) or "startTime" not in p:
+            continue
+        out.append({
+            "channel": name,
+            "startTime": str(p.get("startTime", "")),
+            "endTime": str(p.get("endTime", "")),
+            "name": p.get("name", "未知节目"),
+        })
+    return out
+
+
+def render_epg_xml(tmp_path, final_path, channels, records, tz):
+    """把窗口内所有日期的节目渲染成完整 XMLTV，成功后原子替换旧文件。"""
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        f.write('<?xml version="1.0" encoding="UTF-8"?>\n<tv>\n')
+        for c in channels:
+            n = xmlesc(c["name"])
+            f.write(f'  <channel id="{n}">\n')
+            f.write(f'    <display-name lang="zh">{n}</display-name>\n')
+            f.write("  </channel>\n")
+        for r in sorted(records, key=lambda x: (x["startTime"], x["channel"])):
+            try:
+                st = datetime.fromtimestamp(int(r["startTime"]) / 1000, tz).strftime(
+                    "%Y%m%d%H%M%S +0800")
+                et = datetime.fromtimestamp(int(r["endTime"]) / 1000, tz).strftime(
+                    "%Y%m%d%H%M%S +0800")
+            except (KeyError, ValueError, TypeError):
+                continue
+            f.write(f'  <programme channel="{xmlesc(r["channel"])}" '
+                    f'start="{st}" stop="{et}">\n')
+            f.write(f'    <title lang="zh">{xmlesc(r.get("name") or "未知节目")}</title>\n')
+            f.write("    <desc lang=\"zh\"></desc>\n  </programme>\n")
+        f.write("</tv>\n")
+    os.replace(tmp_path, final_path)
+
+
+def fetch_day(state, channels, day_offset, today):
+    """抓取单个日期的全部频道，返回 (records, 失败次数, 有数据次数)。"""
+    records, failed, ok = [], 0, 0
+    for c in channels:
+        payload = make_playbill_payload(c["no"], day_offset, today)
+        pb, err = fetch_playbills(
+            state["session"], payload, state["jsessionid"], state["bme_token"])
+        state["requests"] += 1
+        if err:
+            # 会话大概率已过期：换新会话再试一次
+            if refresh_epg_session(state):
+                pb, err = fetch_playbills(
+                    state["session"], payload, state["jsessionid"], state["bme_token"])
+                state["requests"] += 1
+            if err:
+                failed += 1
+                continue
+        if pb:
+            ok += 1
+            records.extend(to_records((c["name"], p) for p in pb))
+        if state["requests"] - state["since"] >= EPG_REFRESH_EVERY:
+            refresh_epg_session(state)
+        time.sleep(0.02)
+    return records, failed, ok
+
+
+# ---------------------------------------------------------------- 滑动窗口归档
+EPG_ARCHIVE_DIR = os.path.join(OUTPUT_DIR, "epg_archive")
+
+
+def archive_path(date_str):
+    return os.path.join(EPG_ARCHIVE_DIR, date_str + ".json")
+
+
+def load_archive(date_str):
+    p = archive_path(date_str)
+    if not os.path.exists(p):
+        return None
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            d = json.load(f)
+        if isinstance(d.get("records"), list):
+            return d["records"]
+    except Exception as e:
+        logger.warning("EPG 归档损坏，将重新抓取 %s：%s" % (date_str, e))
+    return None
+
+
+def save_archive(date_str, records):
+    os.makedirs(EPG_ARCHIVE_DIR, exist_ok=True)
+    p, tmp = archive_path(date_str), archive_path(date_str) + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump({
+            "date": date_str,
+            "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "count": len(records),
+            "records": records,
+        }, f, ensure_ascii=False)
+    os.replace(tmp, p)
+
+
+def prune_archives(keep_dates):
+    """删除窗口外的归档：每天滚动时最旧一天被删，昨天顺延进历史。"""
+    removed = 0
+    if not os.path.isdir(EPG_ARCHIVE_DIR):
+        return 0
+    for fn in os.listdir(EPG_ARCHIVE_DIR):
+        if fn.endswith(".json") and fn[:-5] not in keep_dates:
+            try:
+                os.remove(os.path.join(EPG_ARCHIVE_DIR, fn))
+                removed += 1
+            except OSError:
+                pass
+    return removed
+
+
+def write_epg_window(session, channels, jsessionid, bme_token,
+                     past_days=7, future_days=3, refresh_history=False):
+    """滑动窗口 EPG：过去 past_days 天 + 今天 + 未来 future_days 天。
+
+    每天一个归档文件。历史日期直接读归档，只有今天/未来（或缺档的历史）才
+    请求接口；每次按当前日期重建窗口，自动删除最旧一天并把昨天顺延为历史。
+    """
+    tz = timezone(timedelta(hours=8))
+    today = datetime.now(tz).replace(hour=0, minute=0, second=0, microsecond=0)
+    past_days = max(0, min(14, int(past_days)))
+    future_days = max(1, min(7, int(future_days)))
+    offsets = list(range(-past_days, future_days + 1))
+    dates = [(today + timedelta(days=o)).strftime("%Y-%m-%d") for o in offsets]
+    keep = set(dates)
+    state = {"session": session, "jsessionid": jsessionid,
+             "bme_token": bme_token, "requests": 0, "since": 0}
+    os.makedirs(EPG_ARCHIVE_DIR, exist_ok=True)
+
+    logger.info("EPG 滑动窗口：过去 %d 天 + 今天 + 未来 %d 天（历史读归档，缺档才补抓）"
+                % (past_days, future_days))
+    all_records, from_cache, fetched = [], 0, 0
+    failed_total, ok_total = 0, 0
+    for offset, date_str in zip(offsets, dates):
+        if offset < 0 and not refresh_history:
+            cached = load_archive(date_str)
+            if cached is not None:
+                all_records.extend(cached)
+                from_cache += 1
+                logger.info("EPG 窗口 %s（%+d 天）：归档命中 %d 条，跳过请求"
+                            % (date_str, offset, len(cached)))
+                continue
+        recs, failed, ok = fetch_day(state, channels, offset, today)
+        failed_total += failed
+        ok_total += ok
+        fetched += 1
+        # 今天/未来的空结果不落档（可能是临时抖动），下次运行会重抓；
+        # 历史日期即使为空也落档，避免反复请求运营商本来就没有的日期。
+        if recs or offset < 0:
+            save_archive(date_str, recs)
+        all_records.extend(recs)
+        logger.info("EPG 窗口 %s（%+d 天）：本次抓取 %d 条，失败 %d 次"
+                    % (date_str, offset, len(recs), failed))
+
+    attempts = fetched * len(channels)
+    if attempts and failed_total > attempts * 0.2:
+        raise RuntimeError(
+            "EPG 窗口抓取不完整：%d/%d 次请求失败，保留上一次的 epg.xml"
+            % (failed_total, attempts))
+    if not all_records:
+        raise RuntimeError("EPG 窗口没有任何节目，保留上一次的 epg.xml")
+
+    path = os.path.join(OUTPUT_DIR, "epg.xml")
+    render_epg_xml(path + ".tmp", path, channels, all_records, tz)
+    removed = prune_archives(keep)
+    logger.info(
+        "EPG 窗口完成：共 %d 天（过去 %d + 今天 + 未来 %d），本次抓取 %d 天、"
+        "归档命中 %d 天，%d 条节目、失败 %d 次，清理过期归档 %d 个 -> %s"
+        % (len(dates), past_days, future_days, fetched, from_cache,
+           len(all_records), failed_total, removed, path))
+    return len(all_records)
+
+
 def write_epg(session, channels, jsessionid, bme_token, days):
     """河北 EPG：/VSP/V3/QueryPlaybillList，必须串行，并发会打失效会话。
 
@@ -537,6 +715,14 @@ def main():
                     help="抓取 EPG 天数，默认取 config.json 的 epg_days（默认 2）")
     ap.add_argument("--skip-epg", action="store_true", help="只更新播放列表")
     ap.add_argument("--no-sync", action="store_true", help="不同步 EPG 到 Git 仓库")
+    ap.add_argument("--epg-window", action="store_true",
+                    help="滑动窗口：过去 N 天 + 今天 + 未来 M 天，按天归档滚动")
+    ap.add_argument("--epg-past-days", type=int, default=7,
+                    help="窗口保留过去几天（默认 7，最大 14）")
+    ap.add_argument("--epg-future-days", type=int, default=3,
+                    help="窗口保留未来几天（默认 3，最大 7）")
+    ap.add_argument("--refresh-history", action="store_true",
+                    help="强制重抓历史日期（默认直接读归档）")
     a = ap.parse_args()
 
     session, user_token, jid, bme = get_auth()
@@ -545,7 +731,12 @@ def main():
     logger.info(f"频道分组：{stats}")
     if not a.skip_epg:
         try:
-            write_epg(session, channels, jid, bme, max(1, a.epg_days))
+            if a.epg_window:
+                write_epg_window(session, channels, jid, bme,
+                                 a.epg_past_days, a.epg_future_days,
+                                 a.refresh_history)
+            else:
+                write_epg(session, channels, jid, bme, max(1, a.epg_days))
         except RuntimeError as e:
             # 让 Web 后台任务能明确判失败，而不是拿残缺节目单继续整理
             logger.error("EPG 抓取失败：%s" % e)

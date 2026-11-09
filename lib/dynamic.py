@@ -88,11 +88,17 @@ def apply_params(text: str, q: dict) -> str:
     return "\n".join(out)
 
 
-def absolutize(text: str, base: str) -> str:
-    """把根相对地址补成绝对地址。base 形如 http://192.168.1.10:5000"""
+def absolutize(text: str, base: str, suffix: str = "") -> str:
+    """把根相对地址补成绝对地址。base 形如 http://192.168.1.10:5000
+
+    suffix 用于开启订阅令牌保护时，在台标 / EPG 地址后追加 ?token=...，
+    否则播放器拉取台标与节目单会因缺少令牌被拒。
+    """
     base = base.rstrip("/")
     if not base:
         return text
-    text = LOGO_ATTR_RE.sub(lambda m: m.group(1) + base + m.group(2) + m.group(3), text)
-    text = EPG_ATTR_RE.sub(lambda m: m.group(1) + base + m.group(2) + m.group(3), text)
+    text = LOGO_ATTR_RE.sub(
+        lambda m: m.group(1) + base + m.group(2) + suffix + m.group(3), text)
+    text = EPG_ATTR_RE.sub(
+        lambda m: m.group(1) + base + m.group(2) + suffix + m.group(3), text)
     return text

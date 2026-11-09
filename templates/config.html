@@ -3,31 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IPTV 配置</title>
+    <title>机顶盒配置 · HBTV All-in-One</title>
     <link href="/static/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/css/app.css" rel="stylesheet">
+    <script src="/static/js/theme.js" defer></script>
     <style>
-        body {
-            background-color: #f8f9fa;
-            min-height: 100vh;
-            padding: 2rem 0;
-        }
-        .main-container {
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        .config-card {
-            height: 100%;
-        }
+        .main-container { max-width: 860px; margin: 0 auto; padding: 20px; }
+        .card-title { font-size: 18px; font-weight: 700; }
     </style>
 </head>
 <body>
+<div class="topbar">
+    <div class="container topbar-inner">
+        <div class="brand">
+            <div class="brand-mark">&#9654;</div>
+            <div>
+                <h1>HBTV <span>All-in-One</span></h1>
+                <div class="brand-sub">机顶盒参数配置 · 河北电信 IPTV</div>
+            </div>
+        </div>
+        <div class="topbar-right">
+            <a class="nav-pill" href="/">返回控制台</a>
+            <button class="nav-pill" type="button" data-theme-toggle>&#9680; <span data-theme-label>深色</span></button>
+            <a class="nav-pill logout" href="/logout">退出</a>
+        </div>
+    </div>
+</div>
     <div class="main-container">
         <div class="row g-4">
             <div class="col-12">
                 <div class="card config-card">
                     <div class="card-body">
-                        <h1 class="card-title mb-4">机顶盒配置（河北电信 · All-in-One）</h1>
+                        <h2 class="card-title mb-3">机顶盒配置（河北电信 · All-in-One）</h2>
                         <div class="alert alert-warning">
                             配置只保存在服务器本地 <code>config/config.json</code>，不通过 Web 静态目录对外提供。<br>
                             带 <strong>*</strong> 的字段来自你自己的机顶盒抓包，含真实账号凭据，请勿公开分享。<br>

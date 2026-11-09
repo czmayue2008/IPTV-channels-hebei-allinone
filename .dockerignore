@@ -7,10 +7,16 @@
 .github
 
 # 真实配置（含 UserID / MAC / STBID / Authenticator）
+# 登录密码哈希、会话密钥、订阅令牌同样严禁打进公开镜像
 config/config.json
 config/config.local.json
 config/*.local.json
 config/*.bak
+config/auth.json
+auth.json
+*.secret
+*.secret_key
+*.tmp
 
 # 频道列表 / EPG / 日志（含内网地址、组播地址、token、回看凭据）
 # 整理产物 output/playlists/ 同样排除，容器启动后由手动/定时整理生成
