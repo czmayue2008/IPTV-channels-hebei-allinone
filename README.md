@@ -1,13 +1,12 @@
 # HBTV All-in-One（河北电信 IPTV · 抓取 + 整理 + 内网订阅）
 
-把原来两个项目合并成一个可独立运行的内网服务：
+本项目由HY4构建
 
 | 来源 | 提供什么 |
 |---|---|
 | `IPTV-channels-hebei` | 河北电信认证、频道与 EPG 抓取、机顶盒配置页 |
 | `hbtv-playlist`（整理层，移植自 `suzukua/iptv-cd-telecom`） | 名称规范化、分组去重、台标匹配、`tvg-id`、7 类多播放器格式、动态参数 |
 
-**原项目没有被修改**：本目录是完整复制后合并的独立项目，`IPTV-channels-hebei/` 与 `hbtv-playlist/` 保持原样。
 
 仓库：<https://github.com/czmayue2008/IPTV-channels-hebei-allinone>
 
@@ -181,7 +180,7 @@ hbtv_simple.txt                          极简 名称,地址
 
 ## 四、纯内网 / 零外部地址
 
-- 页面只用本地 `static/css/bootstrap.min.css`，**移除了原模板里的 socket.io CDN**；没有 jQuery、字体、图标等任何外链。
+- 页面只用本地 `static/css/bootstrap.min.css`。
 - 台标 `logo/` 随项目本地存放，由 `/logo/` 路由提供；播放列表中的台标与 EPG 地址由访问主机动态补全。
 - 抓取脚本固定使用 `--no-sync`，不会向外部 Git 仓库同步；配置的 `epg_git_repo` 在页面标注为禁用。
 - 抓取只访问 `config/config.json` 里的 `AuthenticationIP`（内网 EPG）；整理层完全离线，只用 Python 标准库。
