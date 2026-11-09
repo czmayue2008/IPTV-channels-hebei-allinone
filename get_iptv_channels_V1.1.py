@@ -308,7 +308,29 @@ def write_playlists(channels):
 
 
 # ---------------------------------------------------------------- EPG
+# 河北 EPG 会话有请求次数上限：实测连续约 1000 次请求后，服务端不再返回 JSON
+# 或只返回空 playbillLites。7 天全量需要 342×N 次请求，必须定期重新认证，
+# 否则后半段节目单会静默丢失（旧版把失败吞成 []，还会覆盖掉好的 epg.xml）。
+EPG_REFRESH_EVERY = 300
+
+
+def make_playbill_payload(channel_no, day, today, count=100, offset=0):
+    """构造单频道、单天的 QueryPlaybillList 请求体。"""
+    d = today + timedelta(days=day)
+    return {
+        "queryChannel": {"channelNOs": [channel_no]},
+        "queryPlaybill": {
+            "type": 0, "count": count, "offset": offset,
+            "startTime": int(d.timestamp() * 1000),
+            "endTime": int((d + timedelta(days=1)).timestamp() * 1000),
+            "isFillProgram": 0, "mustIncluded": 0,
+        },
+        "needChannel": 0,
+    }
+
+
 def fetch_playbills(session, payload, jsessionid, bme_token):
+    """返回 (playbillLites, error)。error 非空表示请求失败，需重新认证后重试。"""
     headers = {
         "User-Agent": UserAgent,
         "Content-Type": "application/json;charset=UTF-8",
@@ -326,45 +348,116 @@ def fetch_playbills(session, payload, jsessionid, bme_token):
                 raise ValueError(
                     "retCode=" + str(d.get("result", {}).get("retCode"))
                 )
-            return d.get("channelPlaybills", [{}])[0].get("playbillLites", [])
+            return d.get("channelPlaybills", [{}])[0].get("playbillLites", []) or [], ""
         except (requests.RequestException, ValueError, json.JSONDecodeError) as e:
             if attempt == 1:
-                logger.debug(f"EPG 请求失败：{e}")
-                return []
+                return [], "%s: %s" % (type(e).__name__, str(e)[:100])
             time.sleep(0.2)
-    return []
+    return [], "unknown error"
+
+
+def refresh_epg_session(state):
+    """重新走一遍认证，换新的 JSESSIONID / session，绕开每会话请求上限。"""
+    try:
+        session, _user_token, jsessionid, bme_token = get_auth()
+        state.update(session=session, jsessionid=jsessionid,
+                     bme_token=bme_token, since=state["requests"])
+        logger.info("EPG 会话已刷新（累计 %d 次请求）" % state["requests"])
+        return True
+    except Exception as e:
+        logger.warning("EPG 会话刷新失败：%s" % e)
+        return False
+
+
+def detect_available_days(state, channels, today, requested):
+    """运营商通常只提供未来数天节目单（实测今天 +3 天）。
+
+    用前 3 个频道逐天探测，连续 2 天完全没有数据就停止，避免对空日期
+    发出成百上千次无效请求，也减少会话被耗尽的机会。
+    """
+    probes = [c["no"] for c in channels[:3]]
+    if not probes:
+        return requested
+    good, empty_streak = 0, 0
+    for day in range(requested):
+        total = 0
+        for no in probes:
+            pb, err = fetch_playbills(
+                state["session"], make_playbill_payload(no, day, today),
+                state["jsessionid"], state["bme_token"])
+            state["requests"] += 1
+            if not err:
+                total += len(pb)
+        if total:
+            good, empty_streak = day + 1, 0
+        else:
+            empty_streak += 1
+            if empty_streak >= 2:
+                break
+    return max(1, good)
 
 
 def write_epg(session, channels, jsessionid, bme_token, days):
-    """河北 EPG：/VSP/V3/QueryPlaybillList，必须串行，并发会打失效会话。"""
+    """河北 EPG：/VSP/V3/QueryPlaybillList，必须串行，并发会打失效会话。
+
+    失败不再静默吞掉：请求失败会重新认证并重试；若整体失败率过高或没有
+    任何节目，直接报错并保留上一次的 epg.xml，避免用残缺数据覆盖好数据。
+    """
     tz = timezone(timedelta(hours=8))
     today = datetime.now(tz).replace(hour=0, minute=0, second=0, microsecond=0)
-    programs, ok = [], 0
+    state = {"session": session, "jsessionid": jsessionid,
+             "bme_token": bme_token, "requests": 0, "since": 0}
+
+    requested = max(1, days)
+    days = detect_available_days(state, channels, today, requested)
+    if days < requested:
+        logger.info(
+            "运营商当前只提供 %d 天节目单（请求 %d 天），按 %d 天抓取"
+            % (days, requested, days))
+    else:
+        logger.info("EPG 可抓取天数：%d 天，共 %d 个频道" % (days, len(channels)))
+
+    programs, ok, failed = [], 0, 0
     for idx, c in enumerate(channels, 1):
         for day in range(days):
-            d = today + timedelta(days=day)
-            start = int(d.timestamp() * 1000)
-            end = int((d + timedelta(days=1)).timestamp() * 1000)
-            payload = {
-                "queryChannel": {"channelNOs": [c["no"]]},
-                "queryPlaybill": {
-                    "type": 0, "count": 100, "offset": 0,
-                    "startTime": start, "endTime": end,
-                    "isFillProgram": 0, "mustIncluded": 0,
-                },
-                "needChannel": 0,
-            }
-            pb = fetch_playbills(session, payload, jsessionid, bme_token)
+            payload = make_playbill_payload(c["no"], day, today)
+            pb, err = fetch_playbills(
+                state["session"], payload,
+                state["jsessionid"], state["bme_token"])
+            state["requests"] += 1
+            if err:
+                # 会话大概率已过期：换新会话再试一次
+                if refresh_epg_session(state):
+                    pb, err = fetch_playbills(
+                        state["session"], payload,
+                        state["jsessionid"], state["bme_token"])
+                    state["requests"] += 1
+                if err:
+                    failed += 1
+                    if failed <= 5:
+                        logger.warning("EPG 请求失败：%s（%s 第 %d 天）"
+                                       % (err, c["name"], day + 1))
+                    continue
             if pb:
                 ok += 1
                 programs.extend((c["name"], p) for p in pb)
+            if state["requests"] - state["since"] >= EPG_REFRESH_EVERY:
+                refresh_epg_session(state)
             time.sleep(0.02)
-        if idx % 100 == 0:
-            logger.info(f"EPG 进度 {idx}/{len(channels)}，{len(programs)} 条节目")
+        if idx % 50 == 0:
+            logger.info("EPG 进度 %d/%d，%d 条节目，失败 %d 次"
+                        % (idx, len(channels), len(programs), failed))
     programs.sort(key=lambda x: (x[1].get("startTime", ""), x[0]))
 
+    attempts = days * len(channels)
+    if not programs or failed > attempts * 0.2:
+        raise RuntimeError(
+            "EPG 抓取不完整：%d/%d 次请求失败、仅 %d 条节目，保留上一次的 epg.xml"
+            % (failed, attempts, len(programs)))
+
     path = os.path.join(OUTPUT_DIR, "epg.xml")
-    with open(path, "w", encoding="utf-8") as f:
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
         f.write('<?xml version="1.0" encoding="UTF-8"?>\n<tv>\n')
         for c in channels:
             n = xmlesc(c["name"])
@@ -387,7 +480,10 @@ def write_epg(session, channels, jsessionid, bme_token, days):
             f.write(f'    <title lang="zh">{xmlesc(p.get("name", "未知节目"))}</title>\n')
             f.write("    <desc lang=\"zh\"></desc>\n  </programme>\n")
         f.write("</tv>\n")
-    logger.info(f"EPG 完成：{ok} 次有数据请求，{len(programs)} 条节目 -> {path}")
+    os.replace(tmp, path)
+    logger.info(
+        "EPG 完成：%d 天 × %d 频道，%d 次有数据请求、%d 条节目、失败 %d 次 -> %s"
+        % (days, len(channels), ok, len(programs), failed, path))
     return len(programs)
 
 
@@ -448,7 +544,12 @@ def main():
     stats = write_playlists(channels)
     logger.info(f"频道分组：{stats}")
     if not a.skip_epg:
-        write_epg(session, channels, jid, bme, max(1, a.epg_days))
+        try:
+            write_epg(session, channels, jid, bme, max(1, a.epg_days))
+        except RuntimeError as e:
+            # 让 Web 后台任务能明确判失败，而不是拿残缺节目单继续整理
+            logger.error("EPG 抓取失败：%s" % e)
+            sys.exit(1)
     if not a.no_sync:
         sync_epg()
     logger.info("全部完成：output/hbtv.txt、output/hbtv.m3u、output/epg.xml")

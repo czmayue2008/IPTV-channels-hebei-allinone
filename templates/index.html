@@ -44,7 +44,7 @@ table{font-size:14px}td,th{vertical-align:middle!important}
           <span>手动整理</span><span id="jobBadge" class="badge bg-secondary">空闲</span>
         </div>
         <div class="card-body">
-          <p class="hint mb-3">「立即整理」只用现有 <span class="mono">output/hbtv.m3u</span> 重新生成播放列表；「抓取并整理」会先连内网 EPG 重新抓频道与节目单，再整理。</p>
+          <p class="hint mb-3">「立即整理」只用现有 <span class="mono">output/hbtv.m3u</span> 与 <span class="mono">epg.xml</span> 重新生成播放列表，<b>不会重新抓 EPG</b>；「抓取并整理」会先按下方「EPG 天数」连内网重新抓频道与节目单，再整理（无需开启定时）。</p>
           <div class="d-flex flex-wrap gap-2">
             <button id="btnOrganize" class="btn btn-primary">立即整理</button>
             <button id="btnFull" class="btn btn-outline-primary">抓取并整理</button>
@@ -86,6 +86,7 @@ table{font-size:14px}td,th{vertical-align:middle!important}
             <div class="col-md-3">
               <label class="form-label small">EPG 天数</label>
               <input type="number" class="form-control form-control-sm" id="schEpgDays" min="1" max="7" value="2">
+              <div class="hint mt-1">手动「抓取并整理」与定时抓取都用这个值；运营商通常只给 4~5 天，超出按实际可用天数抓取</div>
             </div>
           </div>
           <div class="row mt-3">
@@ -322,8 +323,11 @@ function toggleMode(){
 $('schMode').onchange = toggleMode;
 async function startJob(mode){
   try{
+    const body = {mode: mode};
+    // 「抓取并整理」直接采用页面上填的 EPG 天数，不必先保存定时设置
+    if (mode === 'full') body.epg_days = parseInt($('schEpgDays').value, 10) || 2;
     const r = await fetch('/api/job/start', {method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({mode: mode})}).then(x => x.json());
+      body: JSON.stringify(body)}).then(x => x.json());
     if (!r.success) alertBox(r.message, 'warning');
     else { $('alertBox').innerHTML = ''; setTimeout(refresh, 200); }
   }catch(e){ alertBox('请求失败：' + e, 'danger'); }

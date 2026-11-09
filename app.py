@@ -106,12 +106,13 @@ def _fetch(epg_days: int) -> bool:
     return rc == 0
 
 
-def _worker(mode: str, trigger: str):
+def _worker(mode: str, trigger: str, epg_days: int | None = None):
     ok, err = True, ""
     try:
         sched = read_schedule()
         if mode == "full":
-            if not _fetch(int(sched.get("epg_days", 2))):
+            days = epg_days if epg_days is not None else int(sched.get("epg_days", 2))
+            if not _fetch(days):
                 raise RuntimeError("抓取失败，本次不整理（源数据保持上一次结果）")
         cfg = organize.load_config()
         manifest = organize.run(cfg, emit=lambda s: log(s))
@@ -127,18 +128,25 @@ def _worker(mode: str, trigger: str):
             STATE.update(running=False, finished_at=now_str(), ok=ok, error=err)
 
 
-def start_job(mode: str = "organize", trigger: str = "manual") -> tuple[bool, str]:
+def start_job(mode: str = "organize", trigger: str = "manual",
+              epg_days: int | None = None) -> tuple[bool, str]:
+    """epg_days 仅手动「抓取并整理」可临时覆盖；定时任务仍用 schedule 配置。"""
     if mode not in ("organize", "full"):
         return False, "未知任务类型"
+    if epg_days is not None and not 1 <= epg_days <= 7:
+        return False, "EPG 天数需在 1~7 之间"
     with JOB_LOCK:
         if STATE["running"]:
             return False, "已有任务正在运行，请稍候"
         STATE.update(running=True, mode=mode, trigger=trigger,
                      started_at=now_str(), finished_at="", ok=None,
                      error="", files=[], logs=[])
-    log("任务启动：%s（%s）" % ("抓取并整理" if mode == "full" else "仅整理",
-                              "定时" if trigger == "schedule" else "手动"))
-    threading.Thread(target=_worker, args=(mode, trigger), daemon=True).start()
+    log("任务启动：%s（%s%s）" % (
+        "抓取并整理" if mode == "full" else "仅整理",
+        "定时" if trigger == "schedule" else "手动",
+        "，EPG %d 天" % epg_days if mode == "full" and epg_days else ""))
+    threading.Thread(target=_worker, args=(mode, trigger, epg_days),
+                     daemon=True).start()
     return True, "任务已启动"
 
 
@@ -397,7 +405,16 @@ def api_logs():
 @app.route("/api/job/start", methods=["POST"])
 def api_job_start():
     data = request.get_json(silent=True) or {}
-    ok, msg = start_job(data.get("mode", "organize"), trigger="manual")
+    days = data.get("epg_days")
+    if days is not None:
+        try:
+            days = int(days)
+        except (TypeError, ValueError):
+            return jsonify({"success": False, "message": "EPG 天数必须是数字"}), 400
+        if not 1 <= days <= 7:
+            return jsonify({"success": False, "message": "EPG 天数需在 1~7 之间"}), 400
+    ok, msg = start_job(data.get("mode", "organize"), trigger="manual",
+                        epg_days=days)
     return jsonify({"success": ok, "message": msg}), (200 if ok else 409)
 
 

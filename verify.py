@@ -52,13 +52,23 @@ def main() -> int:
 
     print("\n[2] Python 语法")
     ok = True
-    for f in ["app.py", "organize.py", "verify.py"] + ["lib/" + x for x in os.listdir(os.path.join(ROOT, "lib")) if x.endswith(".py")]:
+    for f in ["app.py", "organize.py", "verify.py", "get_iptv_channels_V1.1.py"] + ["lib/" + x for x in os.listdir(os.path.join(ROOT, "lib")) if x.endswith(".py")]:
         try:
             py_compile.compile(os.path.join(ROOT, f), doraise=True)
         except Exception as e:
             ok = False
             print("   ", f, e)
     check("全部模块可编译", ok)
+
+    print("\n[2b] EPG 多天抓取健壮性")
+    src = open(os.path.join(ROOT, "get_iptv_channels_V1.1.py"), encoding="utf-8").read()
+    check("会话定期重新认证", "EPG_REFRESH_EVERY" in src and "refresh_epg_session" in src)
+    check("刷新阈值低于会话上限", bool(re.search(r"EPG_REFRESH_EVERY\s*=\s*(\d+)", src))
+          and int(re.search(r"EPG_REFRESH_EVERY\s*=\s*(\d+)", src).group(1)) < 1000)
+    check("自动探测运营商可用天数", "detect_available_days" in src)
+    check("失败重试而非静默吞掉", "pb, err = fetch_playbills" in src and "failed += 1" in src)
+    check("残缺结果不覆盖旧 EPG", "raise RuntimeError" in src and "os.replace(tmp, path)" in src)
+    check("EPG 失败时非零退出", "sys.exit(1)" in src)
 
     print("\n[3] 整理产物")
     files = sorted(os.listdir(OUT)) if os.path.isdir(OUT) else []
