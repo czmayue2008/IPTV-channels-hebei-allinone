@@ -54,19 +54,18 @@ jobs:
           username: ${{ env.DH_USER }}
           password: ${{ env.DH_TOKEN }}
 
+      # 只推送 latest：无论 push / tag / 手动触发，都只更新 latest，
+      # 不再生成 sha-<短SHA> 历史标签，避免 GHCR 与 Docker Hub 不断累积旧版本。
       - name: Compose image tags
         id: tags
         shell: bash
         run: |
           OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          SHORT="${GITHUB_SHA::7}"
           {
             echo 'tags<<EOF'
             echo "ghcr.io/$OWNER/${{ env.IMAGE_NAME }}:latest"
-            echo "ghcr.io/$OWNER/${{ env.IMAGE_NAME }}:sha-$SHORT"
             if [ -n "$DH_USER" ]; then
               echo "docker.io/$DH_USER/${{ env.IMAGE_NAME }}:latest"
-              echo "docker.io/$DH_USER/${{ env.IMAGE_NAME }}:sha-$SHORT"
             fi
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
