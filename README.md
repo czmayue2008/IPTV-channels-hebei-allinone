@@ -1,8 +1,11 @@
 # HBTV All-in-One · 河北电信 IPTV 抓取 + 整理 + 内网订阅
 
+[![访问量](https://hits.sh/github.com/czmayue2008/IPTV-channels-hebei-allinone.svg?label=%E8%AE%BF%E9%97%AE&color=4f46e5)](https://github.com/czmayue2008/IPTV-channels-hebei-allinone)
+![stars](https://img.shields.io/github/stars/czmayue2008/IPTV-channels-hebei-allinone?color=4f46e5&label=stars)
+![forks](https://img.shields.io/github/forks/czmayue2008/IPTV-channels-hebei-allinone?color=4f46e5&label=forks)
+![last commit](https://img.shields.io/github/last-commit/czmayue2008/IPTV-channels-hebei-allinone?label=last%20commit)
 ![docker pulls](https://img.shields.io/docker/pulls/czmayue2008/iptv-channels-hebei-allinone?label=docker%20pulls)
 ![python](https://img.shields.io/badge/python-3.11-blue)
-![base](https://img.shields.io/badge/base-python%3A3.11--slim-lightgrey)
 
 一个跑在自己内网里的容器：**登录机顶盒、抓频道与节目单、按常规 IPTV 分组整理成十几种播放器格式、用手机电视直接订阅**。全程只访问你自己的内网地址，不依赖任何外部服务。
 
@@ -346,6 +349,9 @@ PORT=8080 python app.py                  # 改端口
 
 **忘记管理员密码？**
 删除 `config/auth.json` 并重启，重新设置即可，机顶盒配置与产物都不受影响。
+
+**README 顶部的「访问」数字是怎么来的？**
+来自第三方计数服务 `hits.sh`：这张徽标每次被拉取就 +1，GitHub 会把图片缓存一段时间，所以它偏保守、也有延迟，只能看个大概趋势。真正准确的数字在仓库自己的 **Insights → Traffic**（只有仓库所有者能看，保留最近 14 天，另有 clone 数、来源站点和热门页面）。
 
 ## 安全提醒
 
