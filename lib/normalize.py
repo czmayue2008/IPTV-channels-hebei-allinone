@@ -9,8 +9,11 @@
    「北京卫视4K」与「北京卫视超高清」）。原项目直接去画质词会撞名并丢频道。
    这里把 tvg-id 统一到标清基础名（共用 EPG 与台标），tvg-name 仅在撞名时
    保留画质词，从而一个频道都不丢。
-2. 分组规则从「四川本地」改为「河北本地 / 购物 / 测试与直播室」，并保留
-   原项目的 group-title 作为兜底。
+2. 分组规则从「四川本地」改为面向河北数据的完整分类树：央视 / 卫视 /
+   河北本地（省市）/ 河北县级（正则兜底）/ 少儿 / 影视 / 体育休闲 /
+   纪实文化 / 生活时尚 / 购物 / 测试与直播室 / 其他（兜底）。
+   规则支持 keywords 子串与 regex 正则两种匹配，空规则作为兜底组，
+   不再沿用源 m3u 的 group-title（源里绝大多数频道都标着「其他频道」）。
 """
 from __future__ import annotations
 
@@ -86,11 +89,30 @@ def is_4k(name: str) -> bool:
 
 
 def classify(name: str, raw_group: str, cfg: dict) -> str:
+    """把频道归入分组。
+
+    规则按 groups 数组顺序匹配，先中先得。每条规则支持两种匹配方式：
+
+    - ``keywords``：子串匹配（原有行为，大小写不敏感）；
+    - ``regex``：正则匹配，用于无法逐一枚举的成批频道
+      （如河北县级台 ``XX电视 / XX综合 / XX新闻综合 / XX综合频道``）。
+
+    ``keywords`` 与 ``regex`` 均为空的规则视为**兜底组**：所有规则都不中时
+    归入该组，而不是沿用源 m3u 的 group-title（源里 260+ 个频道都标着
+    「其他频道」，还会漏「数字频道」这类零散分组，导致分组泄漏）。
+    若没有空规则，则退回旧行为（raw_group 或「其他频道」）。
+    """
+    fallback = raw_group or "其他频道"
     for rule in cfg.get("groups", []):
         kws = rule.get("keywords") or []
-        if kws and any(k in name for k in kws):
+        rx = rule.get("regex") or ""
+        if kws and _match_any(name, kws):
             return rule["name"]
-    return raw_group or "其他频道"
+        if rx and re.search(rx, name):
+            return rule["name"]
+        if not kws and not rx:
+            fallback = rule["name"]
+    return fallback
 
 
 def _match_any(name: str, words: list[str]) -> bool:
