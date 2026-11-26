@@ -34,11 +34,10 @@
             <div class="col-12">
                 <div class="card config-card">
                     <div class="card-body">
-                        <h2 class="card-title mb-3">机顶盒配置（河北电信 · All-in-One）</h2>
+                        <h2 class="card-title mb-3">机顶盒配置</h2>
                         <div class="alert alert-warning">
-                            配置只保存在服务器本地 <code>config/config.json</code>，不通过 Web 静态目录对外提供。<br>
-                            带 <strong>*</strong> 的字段来自你自己的机顶盒抓包，含真实账号凭据，请勿公开分享。<br>
-                            本机顶盒配置只用于访问<strong>内网 EPG</strong>；本服务不会请求任何外部地址。
+                            带 <strong>*</strong> 的字段来自你自己机顶盒的抓包数据，属于真实账号凭据，请勿公开分享。<br>
+                            配置保存在服务器本地 <code>config/config.json</code>。
                         </div>
                         <form id="configForm">
                             <div class="mb-3">
@@ -50,7 +49,7 @@
                                 <input type="text" class="form-control" id="UserID" name="UserID" value="{{ config.get('UserID', '') }}" placeholder="抓包获取，形如 xxxxxxxx@itv" required>
                             </div>
                             <div class="mb-3">
-                                <label for="ip" class="form-label">机顶盒 IP（河北版仅作记录，可随便填）</label>
+                                <label for="ip" class="form-label">机顶盒 IP（选填，仅作记录）</label>
                                 <input type="text" class="form-control" id="ip" name="ip" value="{{ config.get('ip', '') }}" placeholder="例如 10.x.x.x">
                             </div>
                             <div class="mb-3">
@@ -78,10 +77,6 @@
                             <div class="mb-3">
                                 <label for="Authenticator" class="form-label">Authenticator *（256 位 hex，抓包获取）</label>
                                 <input type="text" class="form-control" id="Authenticator" name="Authenticator" value="{{ config.get('Authenticator', '') }}" placeholder="从 ValidAuthenticationHWCTC.jsp 的 POST 表单中提取" required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="key" class="form-label">Key（河北版不使用，留空即可）</label>
-                                <input type="text" class="form-control" id="key" name="key" value="{{ config.get('key', '') }}" placeholder="仅四川版 3DES 反推用">
                             </div>
                             <div class="mb-4">
                                 <label for="RTP2HTTPD" class="form-label">RTP2HTTPD / udpxy 地址 *</label>
@@ -128,16 +123,6 @@
                             <div class="mb-3">
                                 <label for="EPGTemplate" class="form-label">EPG Referer 模板路径</label>
                                 <input type="text" class="form-control" id="EPGTemplate" name="EPGTemplate" value="{{ config.get('EPGTemplate', '/EPG/jsp/hbdxpukka/en/epg/pages/tvod-player/index.html') }}">
-                            </div>
-                            <hr>
-                            <p class="text-muted">本项目为纯内网运行，抓取任务固定带 <code>--no-sync</code>，<strong>不会向任何外部 Git 仓库同步</strong>。下面两项仅为兼容旧配置保留，请留空。</p>
-                            <div class="mb-3">
-                                <label for="epg_git_repo" class="form-label">EPG Git 仓库地址（禁用，留空）</label>
-                                <input type="text" class="form-control" id="epg_git_repo" name="epg_git_repo" value="{{ config.get('epg_git_repo', '') }}" placeholder="留空">
-                            </div>
-                            <div class="mb-3">
-                                <label for="epg_git_private_token" class="form-label">EPG Git Token（禁用，留空）</label>
-                                <input type="password" class="form-control" id="epg_git_private_token" name="epg_git_private_token" value="{{ config.get('epg_git_private_token', '') }}" placeholder="留空">
                             </div>
                             <button type="submit" class="btn btn-primary w-100">保存配置并抓取整理</button>
                         </form>

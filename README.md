@@ -182,7 +182,7 @@ hbtv_simple.txt                          极简 名称,地址
 
 - 页面只用本地 `static/css/bootstrap.min.css`。
 - 台标 `logo/` 随项目本地存放，由 `/logo/` 路由提供；播放列表中的台标与 EPG 地址由访问主机动态补全。
-- 抓取脚本固定使用 `--no-sync`，不会向外部 Git 仓库同步；配置的 `epg_git_repo` 在页面标注为禁用。
+- 抓取脚本固定使用 `--no-sync`，不会向外部 Git 仓库同步；配置页不再提供 Git 相关字段。
 - 抓取只访问 `config/config.json` 里的 `AuthenticationIP`（内网 EPG）；整理层完全离线，只用 Python 标准库。
 - 定时任务为进程内线程，不写 crontab、不启 cron 服务。
 - 提交前可用 `python verify.py` 做自检（含外部地址扫描）。
