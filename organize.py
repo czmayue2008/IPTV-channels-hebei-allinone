@@ -42,9 +42,59 @@ def now_str() -> str:
     return datetime.now(CST).strftime("%Y-%m-%d %H:%M:%S")
 
 
+GROUPS_OPT_OUT = "manual"      # groups_version 填这个值表示「我的分组我自己改，别动」
+
+
+def bundled_config() -> dict:
+    """镜像内置的默认整理配置。Docker 里在 defaults/，源码运行时就是 config/ 那份。"""
+    p = resolve("defaults/organize.json")
+    if not os.path.isfile(p):
+        p = ORGANIZE_CONFIG
+    if not os.path.isfile(p):
+        return {}
+    with open(p, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def upgrade_groups(path: str, cfg: dict) -> str:
+    """把过旧的分组规则升级到镜像内置版本，其余用户设置原样保留。
+
+    Docker 部署时整个 config/ 是挂载卷，宿主机上的 organize.json 会盖住镜像里
+    的新规则（代理地址、定时计划也存在这个文件里，不能靠删文件解决）。
+    这里只在 groups_version 落后时替换 groups 一项并写回，所以只发生一次。
+    """
+    ver = cfg.get("groups_version")
+    if ver == GROUPS_OPT_OUT:
+        return ""
+    try:
+        default = bundled_config()
+    except Exception:
+        return ""
+    want = default.get("groups_version")
+    if not want or ver == want or not default.get("groups"):
+        return ""
+    old = [g.get("name") for g in cfg.get("groups") or []]
+    cfg["groups"] = default["groups"]
+    cfg["groups_version"] = want
+    # 写回，下次启动不再重复迁移；写失败也不影响本次整理
+    try:
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8", newline="\n") as f:
+            json.dump(cfg, f, ensure_ascii=False, indent=2)
+            f.write("\n")
+        os.replace(tmp, path)
+    except Exception:
+        pass
+    return "分组规则已升级到 v%s：%s → %s" % (want, "、".join(old) or "-",
+                                            "、".join(g["name"] for g in cfg["groups"]))
+
+
 def load_config(path: str = ORGANIZE_CONFIG, overrides: dict | None = None) -> dict:
     with open(path, "r", encoding="utf-8") as f:
         cfg = json.load(f)
+    note = upgrade_groups(path, cfg)
+    if note:
+        cfg["_groups_note"] = note
     preset = (overrides or {}).pop("preset", None)
     if preset is None:
         preset = cfg.get("preset", "")
@@ -65,6 +115,10 @@ def run(cfg: dict | None = None, emit=None, with_epg: bool = True) -> dict:
     """执行一次整理。返回统计与全部输出文件名。emit 为逐行日志回调。"""
     emit = emit or (lambda _s: None)
     cfg = cfg if cfg is not None else load_config()
+
+    note = cfg.pop("_groups_note", "")
+    if note:
+        emit(note)
 
     src_m3u = resolve(cfg["source"]["playlist"])
     src_epg = resolve(cfg["source"]["epg"])

@@ -27,7 +27,7 @@ docker run -d --name hbtv -p 5000:5000 \
 # docker pull ghcr.io/czmayue2008/iptv-channels-hebei-allinone:latest
 ```
 
-镜像内**不含任何真实机顶盒参数**：首次启动会从 `config.example.json` 生成占位配置，打开 `http://<内网IP>:5000/config` 填自己的 UserID / MAC / STBID / Authenticator 后即可抓取。挂载 `config` 与 `output` 两个卷可让配置和整理产物持久化；即使挂载的是空 `config` 目录，启动脚本也会从镜像内置模板自动补齐 `config.example.json` / `organize.json` / `config.json`。
+镜像内**不含任何真实机顶盒参数**：首次启动会从 `config.example.json` 生成占位配置，打开 `http://<内网IP>:5000/config` 填自己的 UserID / MAC / STBID / Authenticator 后即可抓取。挂载 `config` 与 `output` 两个卷可让配置和整理产物持久化；即使挂载的是空 `config` 目录，启动脚本也会从镜像内置模板自动补齐 `config.example.json` / `organize.json` / `config.json`。挂载卷里的 `organize.json` 不会随镜像更新：分组规则带 `groups_version`，镜像内置版本更高时，升级后首次整理会自动只替换 `groups` 一项（代理、定时、过滤词等设置保留），不想被自动升级就把 `groups_version` 改成 `manual`。
 
 ### 源码运行 / 本地构建
 
