@@ -268,7 +268,7 @@ FORMATS = {
 
 
 def render_all(channels: list[Channel], cfg: dict) -> dict[str, str]:
-    """返回 {文件名: 内容}。"""
+    """返回 {文件名: 内容}。订阅页 index.html 由调用方在补齐 EPG / 别名后再生成。"""
     files: dict[str, str] = {}
     for key, spec in FORMATS.items():
         if key not in cfg.get("formats", list(FORMATS)):
@@ -282,7 +282,6 @@ def render_all(channels: list[Channel], cfg: dict) -> dict[str, str]:
     if "simple" in cfg.get("formats", []):
         files["hbtv_simple.txt"] = render_simple(channels, cfg)
     files["channels.json"] = render_channels_json(channels, cfg)
-    files["index.html"] = render_index(channels, cfg, files)
     return files
 
 
@@ -324,6 +323,7 @@ def render_index(channels: list[Channel], cfg: dict, files: dict[str, str]) -> s
     return """<!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" type="image/png" href="/static/favicon.png">
 <title>%s - 订阅中心</title>
 <style>
 *{box-sizing:border-box}

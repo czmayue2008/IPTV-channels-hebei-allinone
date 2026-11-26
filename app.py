@@ -29,13 +29,19 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ROOT)
 
 import organize                                   # noqa: E402
+from lib.health import build as build_health_report      # noqa: E402
 from lib.dynamic import absolutize, apply_params   # noqa: E402
+from lib.logo import IMG_EXT, LogoIndex            # noqa: E402
 
 CONFIG_PATH = os.path.join(ROOT, "config", "config.json")
 ORGANIZE_CONFIG = organize.ORGANIZE_CONFIG
 OUTPUT_DIR = os.path.join(ROOT, "output")
 PLAYLIST_DIR = os.path.join(OUTPUT_DIR, "playlists")
 LOGO_DIR = os.path.join(ROOT, "logo")
+# 控制台上传的台标：放在挂载卷 config/ 下，容器重建或升级镜像后仍在
+USER_LOGO_DIR = os.path.join(ROOT, "config", "logos")
+LOGO_MAX_BYTES = 2 * 1024 * 1024
+LOGO_MAX_FILES = 50
 FETCH_SCRIPT = os.path.join(ROOT, "get_iptv_channels_V1.1.py")
 
 app = Flask(__name__, static_folder="static", static_url_path="/static")
@@ -51,6 +57,8 @@ app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
     PERMANENT_SESSION_LIFETIME=timedelta(days=SESSION_DAYS),
+    # 仅台标上传会收到较大的请求体：单张不超过 LOGO_MAX_BYTES
+    MAX_CONTENT_LENGTH=LOGO_MAX_BYTES * LOGO_MAX_FILES * 1.1,
 )
 app.secret_key = os.environ.get("HBTV_SECRET_KEY") or secrets.token_hex(32)
 
@@ -73,6 +81,16 @@ def now_str() -> str:
 
 def ts_str(ts: float | None) -> str:
     return datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S") if ts else ""
+
+
+def write_json_atomic(path: str, data) -> None:
+    """先写临时文件再原子替换：进程被中断也不会留下半截 JSON 把配置弄坏。"""
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8", newline="\n") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+    os.replace(tmp, path)
 
 
 # --------------------------------------------------------------------------
@@ -185,6 +203,7 @@ elif load_auth().get("secret_key"):
 # 任务状态（手动整理 / 定时整理共用）
 # --------------------------------------------------------------------------
 JOB_LOCK = threading.Lock()
+START_TS = time.time()          # 进程启动时间，健康检查里算「已运行多久」用
 STATE = {
     "running": False,
     "mode": "",
@@ -196,13 +215,17 @@ STATE = {
     "files": [],
     "last_result": {},
     "logs": [],
+    # 日志序号只增不减：每条日志带绝对序号，新任务清空日志列表时序号继续累加，
+    # 否则前端按旧序号拉取会漏掉新任务的前几十行。
+    "log_total": 0,
 }
 
 
 def log(text: str, level: str = "info"):
     with JOB_LOCK:
+        STATE["log_total"] += 1
         STATE["logs"].append({
-            "i": len(STATE["logs"]),
+            "i": STATE["log_total"],
             "t": datetime.now().strftime("%H:%M:%S"),
             "text": str(text),
             "level": level,
@@ -255,7 +278,7 @@ def _worker(mode: str, trigger: str, epg_days: int | None = None,
     try:
         sched = read_schedule()
         if mode == "full":
-            days = epg_days if epg_days is not None else int(sched.get("epg_days", 2))
+            days = epg_days if epg_days is not None else int(sched.get("epg_days", 3))
             if not _fetch(days, epg_past_days, epg_window):
                 raise RuntimeError("抓取失败，本次不整理（源数据保持上一次结果）")
         cfg = organize.load_config()
@@ -563,12 +586,21 @@ def config():
 def save_config():
     try:
         data = request.get_json(force=True)
-        os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
-        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
+        if not isinstance(data, dict) or not data:
+            return jsonify({"success": False, "message": "配置内容格式不对"}), 400
+        write_json_atomic(CONFIG_PATH, data)
         return jsonify({"success": True, "message": "配置已保存"})
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
+
+
+@app.route("/favicon.ico")
+def favicon():
+    """浏览器会自动请求 /favicon.ico：返回本地图标，避免控制台里出现 404。"""
+    r = send_from_directory(os.path.join(ROOT, "static"), "favicon.png")
+    r.headers["Content-Type"] = "image/png"
+    r.headers["Cache-Control"] = "public, max-age=604800"
+    return r
 
 
 @app.route("/output/<path:filename>")
@@ -579,10 +611,166 @@ def output_file(filename):
 
 @app.route("/logo/<path:filename>")
 def logo_file(filename):
-    """台标：本地文件，零外部请求。"""
-    r = send_from_directory(LOGO_DIR, unquote(filename))
-    r.headers["Cache-Control"] = "public, max-age=86400"
+    """台标：本地文件。控制台上传的台标与内置台标同名时，上传的优先。"""
+    filename = unquote(filename)
+    name = os.path.basename(filename)
+    if name != filename:
+        return Response("not found", status=404)
+    uploaded = os.path.isfile(os.path.join(USER_LOGO_DIR, name))
+    r = send_from_directory(USER_LOGO_DIR if uploaded else LOGO_DIR, name)
+    # 上传的台标可能被同名覆盖，缓存时间短一些；内置台标库不变，可以长缓存
+    r.headers["Cache-Control"] = "public, max-age=" + ("300" if uploaded else "86400")
     return r
+
+
+def _safe_logo_name(text: str) -> str:
+    """频道名 → 可做文件名的字符串。"""
+    s = re.sub(r'[\\/:*?"<>|\x00-\x1f\x7f]', "", unquote(text or "")).strip(" .")
+    if s.upper().split(".")[0] in {"CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3",
+                                   "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+                                   "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6",
+                                   "LPT7", "LPT8", "LPT9"}:
+        s = "_" + s
+    return s[:60]
+
+
+def _logo_index() -> LogoIndex:
+    try:
+        aliases = read_organize_config().get("logo", {}).get("aliases", {})
+    except Exception:
+        aliases = {}
+    return LogoIndex(LOGO_DIR, aliases, [USER_LOGO_DIR])
+
+
+def _organized_channels() -> dict:
+    """上次整理的结果：{'generated_at': str, 'channels': [...]}。"""
+    try:
+        with open(os.path.join(PLAYLIST_DIR, "channels.json"), "r", encoding="utf-8") as f:
+            d = json.load(f)
+        return {"generated_at": d.get("generated_at", ""), "channels": d.get("channels") or []}
+    except Exception:
+        return {"generated_at": "", "channels": []}
+
+
+@app.route("/api/logos")
+def api_logos():
+    """台标管理：已上传的台标、各台标匹配到的频道、还没有台标的频道。"""
+    idx = _logo_index()
+    organized = _organized_channels()
+    used: dict[str, list[str]] = {}
+    missing = []
+    for c in organized["channels"]:
+        fn = idx.lookup(c.get("tvg_id", ""), c.get("tvg_name", ""), c.get("raw_name", ""))
+        if fn:
+            used.setdefault(fn, []).append(c.get("tvg_name", ""))
+        else:
+            missing.append({"name": c.get("tvg_name") or c.get("raw_name", ""),
+                            "group": c.get("group", "")})
+
+    user = []
+    if os.path.isdir(USER_LOGO_DIR):
+        for fn in sorted(os.listdir(USER_LOGO_DIR)):
+            p = os.path.join(USER_LOGO_DIR, fn)
+            if os.path.isfile(p) and os.path.splitext(fn)[1].lower() in IMG_EXT:
+                user.append({
+                    "file": fn,
+                    "name": os.path.splitext(fn)[0],
+                    "size": os.path.getsize(p),
+                    "mtime": ts_str(os.path.getmtime(p)),
+                    "url": "/logo/" + quote(fn),
+                    "matches": used.get(fn, []),
+                })
+    user_files = {u["file"] for u in user}
+    return jsonify({
+        "builtin": sum(1 for fn in idx.files.values() if fn not in user_files),
+        "user": user,
+        "user_hits": sum(len(v) for k, v in used.items() if k in user_files),
+        "builtin_hits": sum(len(v) for k, v in used.items() if k not in user_files),
+        "channel_count": len(organized["channels"]),
+        "matched": len(organized["channels"]) - len(missing),
+        "missing": missing,
+        "organized_at": organized["generated_at"],
+    })
+
+
+@app.route("/api/logos/upload", methods=["POST"])
+def api_logos_upload():
+    """上传台标。文件名（去扩展名）就是频道名；可用 names（JSON 数组）逐个指定。
+
+    organize=1 时上传成功后自动「立即整理」，让台标马上出现在播放列表里。
+    """
+    files = request.files.getlist("file")
+    if not files:
+        return jsonify({"success": False, "message": "没有收到文件"}), 400
+    if len(files) > LOGO_MAX_FILES:
+        return jsonify({"success": False, "message": "一次最多上传 %d 个" % LOGO_MAX_FILES}), 400
+    try:
+        names = json.loads(request.form.get("names") or "[]")
+        if not isinstance(names, list):
+            raise ValueError
+    except ValueError:
+        names = []
+    # names 与 files 按上传顺序一一对应；没给名字的用原文件名
+
+    os.makedirs(USER_LOGO_DIR, exist_ok=True)
+    saved, errors = [], []
+    for i, f in enumerate(files):
+        label = f.filename or "第 %d 个文件" % (i + 1)
+        ext = os.path.splitext(f.filename or "")[1].lower()
+        if ext not in IMG_EXT:
+            errors.append("%s：只支持 PNG / JPG / WEBP / GIF" % label)
+            continue
+        # 频道名缺省或为空白时，用原文件名
+        given = names[i] if i < len(names) else None
+        raw = given.strip() if isinstance(given, str) and given.strip() else os.path.splitext(label)[0]
+        name = _safe_logo_name(raw)
+        if not name:
+            errors.append("%s：频道名不能为空" % label)
+            continue
+        try:
+            data = f.read()
+        except Exception as e:
+            errors.append("%s：读取失败（%s）" % (label, e))
+            continue
+        if not data:
+            errors.append("%s：文件是空的" % label)
+            continue
+        if len(data) > LOGO_MAX_BYTES:
+            errors.append("%s：超过 %d KB" % (label, LOGO_MAX_BYTES // 1024))
+            continue
+        fn = name + ext
+        path = os.path.join(USER_LOGO_DIR, fn)
+        # 与已上传的同名文件、或与内置台标库的同名台标（只比频道名，不比扩展名）
+        # 相遇时，上传的都会生效，这里如实标记出来
+        existed = os.path.exists(path)
+        if not existed and os.path.isdir(LOGO_DIR):
+            existed = any(os.path.splitext(f)[0] == name for f in os.listdir(LOGO_DIR))
+        tmp = path + ".tmp"
+        with open(tmp, "wb") as out:
+            out.write(data)
+        os.replace(tmp, path)
+        saved.append({"file": fn, "name": name, "overwritten": existed})
+
+    result = {"success": bool(saved), "saved": saved, "errors": errors}
+    if saved and request.form.get("organize") in ("1", "true", "on"):
+        ok, msg = start_job("organize", trigger="manual")
+        result["organize"] = ok
+        result["organize_message"] = msg
+    if not saved:
+        result["message"] = "；".join(errors) or "没有保存任何文件"
+        return jsonify(result), 400
+    return jsonify(result)
+
+
+@app.route("/api/logos/delete", methods=["POST"])
+def api_logos_delete():
+    """删除一个已上传的台标。只能删 config/logos 里的，内置台标库动不了。"""
+    fn = os.path.basename((request.get_json(silent=True) or {}).get("file") or "")
+    path = os.path.join(USER_LOGO_DIR, fn)
+    if not fn or not os.path.isfile(path):
+        return jsonify({"success": False, "message": "台标不存在"}), 404
+    os.remove(path)
+    return jsonify({"success": True, "file": fn})
 
 
 @app.route("/playlists")
@@ -644,9 +832,54 @@ def playlist_file(filename):
 # --------------------------------------------------------------------------
 # API
 # --------------------------------------------------------------------------
+def _health_ctx() -> dict:
+    """把健康检查要用的本地数据收齐；任何一项读不到都不影响出报告。"""
+    with JOB_LOCK:
+        state = {k: STATE[k] for k in ("running", "mode", "trigger", "started_at",
+                                       "finished_at", "ok", "error")}
+    with SCHED_LOCK:
+        next_run = _next_run[0]
+    try:
+        ocfg = read_organize_config()
+    except Exception:
+        ocfg = {}
+    src = ocfg.get("source") or {}
+    return {
+        "root": ROOT,
+        "state": state,
+        "started_at": START_TS,
+        "source_playlist": organize.resolve(src.get("playlist", "output/hbtv.m3u")),
+        "source_epg": organize.resolve(src.get("epg", "output/epg.xml")),
+        "playlists_dir": PLAYLIST_DIR,
+        "output_dir": OUTPUT_DIR,
+        "logo_dir": LOGO_DIR,
+        "user_logo_dir": USER_LOGO_DIR,
+        "config_path": CONFIG_PATH,
+        "organize_cfg": ocfg,
+        "schedule": ocfg.get("schedule") or {},
+        "proxy": ocfg.get("proxy") or {},
+        "protect_media": bool(load_auth().get("protect_media")),
+        "next_run": next_run,
+        "groups_version_default": (organize.bundled_config() or {}).get("groups_version"),
+    }
+
+
 @app.route("/health")
 def health():
-    return jsonify({"ok": True, "time": now_str()})
+    """健康检查。浏览器打开是体检报告页；程序访问（?format=json 或不接受 HTML）得到 JSON。
+
+    本路由免登录：未登录只核对「服务是否在运行」，频道数、代理地址这类
+    信息要登录后才展示。
+    """
+    detailed = is_logged_in()
+    report = build_health_report(_health_ctx(), detailed=detailed)
+    as_html = (request.args.get("format") != "json"
+               and "text/html" in request.headers.get("Accept", ""))
+    if as_html:
+        return render_template("health.html", report=report, detailed=detailed,
+                               logged_in=detailed)
+    return jsonify({"ok": report["status"] != "fail", "status": report["status"],
+                    "time": report["time"], "counts": report["counts"]})
 
 
 @app.route("/api/files")
@@ -684,7 +917,7 @@ def api_status():
         s = {k: STATE[k] for k in ("running", "mode", "trigger", "started_at",
                                    "finished_at", "ok", "error", "files",
                                    "last_result")}
-        s["log_seq"] = len(STATE["logs"])
+        s["log_seq"] = STATE["log_total"]
     with SCHED_LOCK:
         s["next_run"] = ts_str(_next_run[0])
     s["schedule"] = read_schedule()
@@ -699,8 +932,8 @@ def api_logs():
     except ValueError:
         since = 0
     with JOB_LOCK:
-        logs = STATE["logs"][since:]
-        seq = len(STATE["logs"])
+        logs = [x for x in STATE["logs"] if x["i"] > since]
+        seq = STATE["log_total"]
     return jsonify({"logs": logs, "seq": seq})
 
 
@@ -768,9 +1001,7 @@ def api_schedule():
             if not 0 <= v <= 14:
                 raise ValueError("EPG 回看天数需在 0~14 之间")
             s["epg_past_days"] = v
-        with open(ORGANIZE_CONFIG, "w", encoding="utf-8") as f:
-            json.dump(cfg, f, ensure_ascii=False, indent=2)
-            f.write("\n")
+        write_json_atomic(ORGANIZE_CONFIG, cfg)
         with SCHED_LOCK:
             _next_run[0] = None        # 让调度线程按新配置重算
         log("定时整理设置已更新：enabled=%s mode=%s" % (s.get("enabled"), s.get("mode")))
@@ -806,9 +1037,7 @@ def api_organize_config():
         for k in ("udpxy", "rtp2httpd"):
             if k in d:
                 c.setdefault("proxy", {})[k] = str(d[k]).strip()
-        with open(ORGANIZE_CONFIG, "w", encoding="utf-8") as f:
-            json.dump(c, f, ensure_ascii=False, indent=2)
-            f.write("\n")
+        write_json_atomic(ORGANIZE_CONFIG, c)
         return jsonify({"success": True})
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 400

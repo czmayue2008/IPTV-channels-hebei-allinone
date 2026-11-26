@@ -95,7 +95,8 @@ def load_config(path: str = ORGANIZE_CONFIG, overrides: dict | None = None) -> d
     note = upgrade_groups(path, cfg)
     if note:
         cfg["_groups_note"] = note
-    preset = (overrides or {}).pop("preset", None)
+    ov = dict(overrides or {})          # 复制一份，避免 pop 改动调用方的字典
+    preset = ov.pop("preset", None)
     if preset is None:
         preset = cfg.get("preset", "")
     cfg["preset"] = preset
@@ -106,7 +107,7 @@ def load_config(path: str = ORGANIZE_CONFIG, overrides: dict | None = None) -> d
         for k, v in data.items():
             if not k.startswith("_"):
                 cfg[k] = v
-    for k, v in (overrides or {}).items():
+    for k, v in ov.items():
         cfg[k] = v
     return cfg
 
@@ -120,10 +121,18 @@ def run(cfg: dict | None = None, emit=None, with_epg: bool = True) -> dict:
     if note:
         emit(note)
 
-    src_m3u = resolve(cfg["source"]["playlist"])
-    src_epg = resolve(cfg["source"]["epg"])
-    out_dir = resolve(cfg["output_dir"])
+    src = cfg.get("source") or {}
+    src_m3u = resolve(src.get("playlist") or "output/hbtv.m3u")
+    src_epg = resolve(src.get("epg") or "output/epg.xml")
+    out_dir = resolve(cfg.get("output_dir") or "output/playlists")
     os.makedirs(out_dir, exist_ok=True)
+
+    # 源节目单缺失时不要「生成一份空 EPG 覆盖旧数据」：宁可报错让人先抓取，
+    # 否则一次误操作就会把播放器里的节目预告全部清空。确实不需要 EPG 时用 --no-epg。
+    if with_epg and not os.path.isfile(src_epg):
+        raise RuntimeError("找不到源节目单：%s。请先「抓取并整理」；"
+                           "如果确实不需要节目单，请用 python organize.py --no-epg"
+                           % os.path.relpath(src_epg, ROOT).replace("\\", "/"))
 
     emit("源播放列表：%s" % os.path.relpath(src_m3u, ROOT).replace("\\", "/"))
     emit("源 EPG    ：%s" % os.path.relpath(src_epg, ROOT).replace("\\", "/"))
@@ -138,7 +147,9 @@ def run(cfg: dict | None = None, emit=None, with_epg: bool = True) -> dict:
         emit("读取节目  ：%d 条 / %d 个频道" % (len(programmes), len(source_channels)))
 
     logo_dir = resolve(cfg.get("logo", {}).get("dir", "logo"))
-    logos = LogoIndex(logo_dir, cfg.get("logo", {}).get("aliases", {}))
+    # config/logos 是控制台上传的台标目录（挂载卷，随容器重建保留），优先于内置台标库
+    extra_dirs = [resolve("config/logos")] + [resolve(x) for x in cfg.get("logo", {}).get("extra_dirs") or []]
+    logos = LogoIndex(logo_dir, cfg.get("logo", {}).get("aliases", {}), extra_dirs)
     channels = build_channels(raw, cfg, logos.lookup)
     hit = sum(1 for c in channels if c.logo)
     emit("整理频道  ：%d 个（台标库 %d 个，命中 %d 个）" % (len(channels), logos.count(), hit))

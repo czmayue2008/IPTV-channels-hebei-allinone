@@ -120,6 +120,8 @@ code { background: var(--surface-2); padding: 2px 6px; border-radius: 6px; color
 /* ---------------------------------------------------------------- 卡片 */
 .card {
   background: var(--surface);
+  /* Bootstrap 给卡片写死了浅色文字色，深色主题下会变成深底黑字，这里改为跟随主题 */
+  color: var(--text);
   border: 1px solid var(--border);
   border-radius: 15px;
   box-shadow: var(--shadow);
@@ -138,6 +140,29 @@ code { background: var(--surface-2); padding: 2px 6px; border-radius: 6px; color
 .card-body { padding: 18px; }
 hr { border-color: var(--border); opacity: 1; }
 .bg-light, .bg-body-tertiary { background: var(--surface-2) !important; }
+
+/* 宽屏下控制台两栏按行对齐：左右同一行的两张卡片等高，顶边、底边都对齐。
+   两列本身不占位置（display: contents），卡片直接落进 7 : 5 的三行栅格。
+   外边距归零：与上方统计卡片左右边缘对齐，上下间距都是 18px。 */
+.card-log { display: flex; flex-direction: column; }
+@media (min-width: 992px) {
+  .dash-grid {
+    display: grid; gap: 18px; margin: 0 0 18px;
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    grid-template-rows: auto auto 1fr;
+  }
+  .dash-grid > .col-lg-7, .dash-grid > .col-lg-5 { display: contents; }
+  .dash-grid .card { margin-bottom: 0; }
+  .dash-grid > .col-lg-7 > .card { grid-column: 1; }
+  .dash-grid > .col-lg-5 > .card { grid-column: 2; }
+  .dash-grid > [class*="col-"] > .card:nth-child(1) { grid-row: 1; }
+  .dash-grid > [class*="col-"] > .card:nth-child(2) { grid-row: 2; }
+  .dash-grid > [class*="col-"] > .card:nth-child(3) { grid-row: 3; }
+  /* 运行日志不撑高度：最少 150px，多出来的空间都给日志框，卡片高度跟「手动整理」对齐 */
+  .card-log { min-height: 240px; }
+  .card-log .card-body { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; }
+  .card-log #logBox { flex: 1 1 0; min-height: 150px; }
+}
 
 /* ---------------------------------------------------------------- 表单 */
 .form-label, label { color: var(--text); }
@@ -168,6 +193,13 @@ hr { border-color: var(--border); opacity: 1; }
   box-shadow: 0 4px 12px rgba(79, 70, 229, .24);
 }
 .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 7px 18px rgba(79, 70, 229, .34); }
+/* 禁用态：Bootstrap 默认会退回它自己的蓝色（#0d6efd）并加半透明，
+   在主题里显得突兀且文字发灰。这里统一压成中性灰，保留可读性。 */
+.btn-primary:disabled, .btn-primary.disabled,
+.btn-success:disabled, .btn-success.disabled {
+  background: var(--border); color: var(--muted);
+  box-shadow: none; opacity: 1; transform: none;
+}
 .btn-success { background: linear-gradient(135deg, #16a34a, #0d9488); border: none; color: #fff; }
 .btn-success:hover { transform: translateY(-1px); }
 .btn-outline-primary { color: var(--brand-2); border-color: var(--brand-2); }
@@ -182,6 +214,8 @@ hr { border-color: var(--border); opacity: 1; }
 .badge { font-weight: 600; letter-spacing: .2px; border-radius: 999px; padding: 5px 10px; }
 .badge-m3u { background: var(--brand-soft); color: var(--brand-2); }
 .badge-other { background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
+/* Bootstrap 的 bg-success 白字对比度只有 3.3:1，加深一档到 4.9:1，深浅主题都清楚 */
+.badge.bg-success { background: #15803d !important; }
 .alert { border-radius: 11px; border: none; box-shadow: var(--shadow); font-size: 14px; }
 .alert-success { background: #ecfdf5; color: #065f46; }
 .alert-danger { background: #fef2f2; color: #991b1b; }
@@ -214,13 +248,19 @@ hr { border-color: var(--border); opacity: 1; }
 .table th { color: var(--muted); font-weight: 600; font-size: 12px; letter-spacing: .4px;
             text-transform: uppercase; border-bottom-color: var(--border); }
 .table td { border-bottom-color: var(--border); font-size: 13.5px; }
+/* Bootstrap 把表格文字色、斑马纹行文字色都写死成浅色主题的黑字，深色主题下看不清 */
+.table { color: var(--text); --bs-table-color: var(--text); --bs-table-striped-color: var(--text);
+  --bs-table-hover-color: var(--text); --bs-table-active-color: var(--text); }
 .table-hover > tbody > tr:hover, .table-hover > tbody > tr:hover > * {
   --bs-table-accent-bg: var(--surface-2); background-color: var(--surface-2);
 }
 .table-striped > tbody > tr:nth-of-type(odd) > * { --bs-table-accent-bg: var(--surface-2); }
 .file-name { font-weight: 600; color: var(--text); }
 .table-responsive { border-radius: 10px; }
-details summary { cursor: pointer; color: var(--brand-2); font-weight: 600; }
+details summary { cursor: pointer; color: var(--brand-2); font-weight: 600; list-style: none; }
+details summary::-webkit-details-marker { display: none; }
+details summary::before { content: '▸'; display: inline-block; margin-right: 6px; }
+details[open] > summary::before { content: '▾'; }
 
 /* ---------------------------------------------------------------- 概览 */
 .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
@@ -271,3 +311,74 @@ details summary { cursor: pointer; color: var(--brand-2); font-weight: 600; }
 .auth-msg { min-height: 20px; font-size: 13px; margin: 10px 0 0; }
 .auth-msg.err { color: var(--danger); }
 .auth-msg.ok { color: var(--ok); }
+
+/* ---------- 台标管理 ---------- */
+.logo-grid { display: flex; flex-wrap: wrap; gap: 12px; }
+.logo-item {
+  width: 168px; padding: 10px; text-align: center;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px;
+}
+.logo-thumb {
+  width: 100%; height: 72px; object-fit: contain;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+}
+.logo-name {
+  margin-top: 6px; font-size: 13px; font-weight: 600; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.logo-hit { font-size: 12px; color: var(--ok); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.logo-hit.none { color: var(--warn); }
+.logo-item .form-control { margin: 6px 0 2px; }
+.logo-item .btn { margin-top: 6px; }
+.logo-chips { display: flex; flex-wrap: wrap; gap: 8px; max-height: 340px; overflow-y: auto; }
+.logo-chip {
+  padding: 4px 12px; font-size: 13px; cursor: pointer;
+  background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 999px;
+}
+.logo-chip:hover { background: var(--brand-soft); border-color: var(--brand); color: var(--brand-2); }
+
+/* ---------------------------------------------------------------- 健康检查 */
+.st { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.st::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.st-ok { color: var(--ok); }
+.st-warn { color: var(--warn); }
+.st-fail { color: var(--danger); }
+.st-info { color: var(--brand-2); }
+.st-off { color: var(--muted); }
+.health-head { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center;
+  justify-content: space-between; margin-bottom: 18px; }
+.health-head h2 { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font-size: 20px; font-weight: 700; margin: 0 0 4px; }
+.health-counts { display: flex; gap: 14px; }
+.health-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.head-note { margin-left: 10px; font-weight: 400; font-size: 13px; color: var(--muted); }
+.check-table th { white-space: nowrap; }
+.check-table td { vertical-align: top; }
+.check-table .col-status { width: 72px; }
+.check-table .col-name { width: 170px; }
+.check-table .c-name { font-weight: 600; color: var(--text); white-space: nowrap; }
+.check-table .c-val { min-width: 200px; word-break: break-all; }
+.check-table .c-desc { color: var(--muted); font-size: 13px; line-height: 1.6; }
+.day-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 18px 16px; }
+.day-note { font-size: 13px; color: var(--muted); margin-right: 4px; }
+.day-chip { padding: 3px 10px; font-size: 12px; border-radius: 8px;
+  background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
+.day-chip b { font-weight: 600; color: var(--text); margin-left: 2px; }
+.day-chip.today { border-color: var(--brand); color: var(--brand-2); }
+.day-chip.empty { border-color: var(--danger); color: var(--danger); }
+.day-chip.empty b { color: var(--danger); }
+@media (max-width: 767px) { .health-head h2 { font-size: 18px; } }
+
+/* 手机宽度：健康检查表格改成每项上下排，不必横向滚动 */
+@media (max-width: 767px) {
+  .check-table, .check-table tbody, .check-table tr, .check-table td { display: block; width: 100%; }
+  .check-table thead { display: none; }
+  .check-table tr {
+    display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px;
+    padding: 12px 14px; border-bottom: 1px solid var(--border);
+  }
+  .check-table tr:last-child { border-bottom: 0; }
+  .check-table td { border: 0; padding: 0; box-shadow: none !important; }
+  .check-table .c-name { white-space: normal; font-size: 14px; }
+  .check-table .c-val, .check-table .c-desc { grid-column: 1 / -1; min-width: 0; }
+}

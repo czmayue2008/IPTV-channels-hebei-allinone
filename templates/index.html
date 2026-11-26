@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>HBTV All-in-One · 内网控制台</title>
+<link rel="icon" type="image/png" href="/static/favicon.png">
 <link href="/static/css/bootstrap.min.css" rel="stylesheet">
 <link href="/static/css/app.css" rel="stylesheet">
 <script src="/static/js/theme.js" defer></script>
@@ -41,7 +42,7 @@
     <div class="stat-box"><b id="statJob">空闲</b><span>任务状态</span></div>
   </div>
 
-  <div class="row g-3">
+  <div class="row g-3 dash-grid">
     <div class="col-lg-7">
       <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
@@ -162,26 +163,12 @@
     </div>
 
     <div class="col-lg-5">
-      <div class="card">
+      <div class="card card-log">
         <div class="card-header d-flex justify-content-between align-items-center">
           <span>运行日志</span><button class="btn btn-sm btn-outline-secondary" id="btnClearLog">清屏</button>
         </div>
         <div class="card-body"><div id="logBox"></div></div>
       </div>
-      <div class="card">
-        <div class="card-header">内网访问地址</div>
-        <div class="card-body small">
-          <div class="mb-2">控制台：<span class="mono" id="urlHome">-</span></div>
-          <div class="mb-2">订阅中心：<span class="mono" id="urlIndex">-</span></div>
-          <div class="mb-2">APTV：<span class="mono" id="urlAptv">-</span></div>
-          <div class="mb-2">KODI：<span class="mono" id="urlKodi">-</span></div>
-          <div class="mb-2">EPG：<span class="mono" id="urlEpg">-</span></div>
-          <div>台标：<span class="mono" id="urlLogo">-</span></div>
-          <hr>
-          <p class="hint mb-0">以上地址会随你访问时用的内网 IP / 域名自动变化；开启订阅令牌保护后会自动附带 <span class="mono">?token=…</span>。台标由本服务的 <span class="mono">/logo/</span> 提供，不请求任何外部地址。</p>
-        </div>
-      </div>
-
       <div class="card" id="securityCard">
         <div class="card-header d-flex justify-content-between align-items-center">
           <span>安全设置</span><span class="badge badge-m3u">已登录</span>
@@ -191,12 +178,12 @@
             <input class="form-check-input" type="checkbox" id="secProtectMedia">
             <label class="form-check-label small" for="secProtectMedia">订阅令牌保护（播放列表 / 台标 / EPG 也需令牌）</label>
           </div>
-          <div class="hint mt-2">默认关闭，播放器可直接订阅；开启后必须从下方或控制台复制<b>带令牌</b>的完整地址。</div>
+          <div class="hint mt-2" id="secHint">关闭时，下方地址可以直接订阅；开启后地址自动附带令牌，播放器要用带令牌的地址。</div>
           <div class="mt-2 p-2 rounded bg-light small mono" style="word-break:break-all" id="secToken">-</div>
           <div class="d-flex flex-wrap gap-2 mt-2">
             <button class="btn btn-sm btn-primary" id="btnSaveMedia">保存开关</button>
             <button class="btn btn-sm btn-outline-secondary" id="btnRotateToken">重置令牌</button>
-            <button class="btn btn-sm btn-outline-primary" id="btnCopyAptv">复制带令牌的 APTV 地址</button>
+            <button class="btn btn-sm btn-outline-primary" id="btnCopyAptv">复制 APTV 地址</button>
           </div>
           <hr>
           <div class="small fw-semibold mb-2">修改登录密码</div>
@@ -211,6 +198,51 @@
           </div>
         </div>
       </div>
+
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span>内网访问地址</span><span class="badge badge-other" id="urlMode">-</span>
+        </div>
+        <div class="card-body small">
+          <div class="mb-2">控制台：<span class="mono" id="urlHome">-</span></div>
+          <div class="mb-2">订阅中心：<span class="mono" id="urlIndex">-</span></div>
+          <div class="mb-2">APTV：<span class="mono" id="urlAptv">-</span></div>
+          <div class="mb-2">KODI：<span class="mono" id="urlKodi">-</span></div>
+          <div class="mb-2">EPG：<span class="mono" id="urlEpg">-</span></div>
+          <div>台标：<span class="mono" id="urlLogo">-</span></div>
+          <hr>
+          <p class="hint mb-0">地址随你访问时用的内网 IP / 域名自动变化。要带不带令牌，由上方「安全设置」里的开关决定。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <span>台标管理 · <span id="logoSummary" class="fw-normal text-secondary">加载中…</span></span>
+      <button class="btn btn-sm btn-outline-secondary" id="btnRefreshLogos">刷新</button>
+    </div>
+    <div class="card-body">
+      <p class="hint mb-3">台标的文件名就是频道名（如 <span class="mono">井陉电视.png</span>），整理时会自动匹配到播放列表。支持一次选多张图，上传前可以逐个改频道名。</p>
+      <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+        <input type="file" id="logoFiles" class="form-control form-control-sm" style="max-width:420px" accept="image/png,image/jpeg,image/webp,image/gif" multiple>
+        <div class="form-check"><input class="form-check-input" type="checkbox" id="logoAutoOrganize" checked>
+          <label class="form-check-label small" for="logoAutoOrganize">上传后自动整理</label></div>
+        <button class="btn btn-sm btn-primary" id="btnUploadLogos" disabled>上传</button>
+      </div>
+      <div class="hint mb-2">单张不超过 2 MB；文件名里不能用的字符（<span class="mono">\ / : * ? " &lt; &gt; |</span>）会被自动去掉。</div>
+      <div id="logoPending" class="logo-grid mb-3"></div>
+      <div id="logoMsg" class="hint mb-3"></div>
+
+      <div class="small fw-semibold mb-2">已上传（<span id="logoUserCount">0</span>）</div>
+      <div id="logoUserList" class="logo-grid mb-4"></div>
+
+      <details>
+        <summary class="small">还没有台标的频道（<span id="logoMissingCount">0</span>）· 点频道名为它选一张图</summary>
+        <input class="form-control form-control-sm my-2" style="max-width:360px" id="logoSearch" placeholder="输入频道名筛选，例如：井陉">
+        <div id="logoMissing" class="logo-chips mt-2"></div>
+      </details>
+      <input type="file" id="logoOne" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
     </div>
   </div>
 
@@ -223,13 +255,15 @@
       </div>
     </div>
     <div class="card-body">
-      <div id="playlistNames" class="mb-3 p-2 bg-light rounded mono small"></div>
-      <div class="table-responsive">
-        <table class="table table-hover table-sm mb-0">
-          <thead><tr><th>文件名</th><th>类型</th><th>大小</th><th>更新时间</th><th>操作</th></tr></thead>
-          <tbody id="fileRows"></tbody>
-        </table>
-      </div>
+      <details id="fileDetails"><summary class="small">展开查看</summary>
+        <div id="playlistNames" class="mb-3 p-2 bg-light rounded mono small"></div>
+        <div class="table-responsive mt-2">
+          <table class="table table-hover table-sm mb-0">
+            <thead><tr><th>文件名</th><th>类型</th><th>大小</th><th>更新时间</th><th>操作</th></tr></thead>
+            <tbody id="fileRows"></tbody>
+          </table>
+        </div>
+      </details>
     </div>
   </div>
 
@@ -252,10 +286,11 @@
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const origin = location.origin;
-let logSeq = 0, wasRunning = false, lastFinished = '';
-let SUB_TOKEN = '';
+let logSeq = 0, wasRunning = false, lastFinished = '', lastStart = '';
+// 订阅令牌：只有开启「订阅令牌保护」时才带在地址上，关闭时地址干干净净
+let SUB_TOKEN = '', PROTECT_MEDIA = false;
 
-// 开启订阅令牌保护时，所有展示 / 复制 / 打开的订阅地址都自动带上令牌
+// 订阅类地址（播放列表 / EPG / 台标）统一从这里拿：保护开着才附带令牌
 function subUrl(p){
   return origin + p + (SUB_TOKEN
     ? (p.indexOf('?') >= 0 ? '&' : '?') + 'token=' + encodeURIComponent(SUB_TOKEN)
@@ -330,6 +365,8 @@ async function loadFiles(){
 async function refresh(){
   try{
     const s = await fetch('/api/status').then(x => x.json());
+    // 新任务开始时服务端会清空日志，页面也同步清空（按开始时间判断，任务跑得快也不会漏）
+    if (s.started_at && s.started_at !== lastStart){ lastStart = s.started_at; $('logBox').innerHTML = ''; logSeq = 0; }
     const badge = $('jobBadge');
     badge.textContent = s.running ? (s.mode === 'full' ? '抓取并整理中…' : '整理中…') : '空闲';
     badge.className = 'badge ' + (s.running ? 'bg-warning text-dark' : (s.ok === false ? 'bg-danger' : (s.ok === true ? 'bg-success' : 'bg-secondary')));
@@ -343,6 +380,7 @@ async function refresh(){
     if (wasRunning && !s.running && s.finished_at !== lastFinished){
       lastFinished = s.finished_at;
       await loadFiles();
+      loadLogos();
       if (s.ok === true) {
         const names = (s.last_result || {}).playlists || [];
         alertBox('整理完成！共生成 ' + names.length + ' 个播放列表文件：\n' + names.join('   ') + '\n\n完整清单与订阅地址见下方「输出文件」。', 'success');
@@ -392,7 +430,7 @@ async function startJob(mode){
     const r = await fetch('/api/job/start', {method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify(body)}).then(x => x.json());
     if (!r.success) alertBox(r.message, 'warning');
-    else { $('alertBox').innerHTML = ''; setTimeout(refresh, 200); }
+    else { $('alertBox').innerHTML = ''; $('logBox').innerHTML = ''; logSeq = 0; setTimeout(refresh, 200); }
   }catch(e){ alertBox('请求失败：' + e, 'danger'); }
 }
 $('btnOrganize').onclick = () => startJob('organize');
@@ -431,9 +469,16 @@ function secMsg(text, ok){
 async function initAuth(){
   try{
     const a = await fetch('/api/auth/status').then(x => x.json());
-    SUB_TOKEN = a.subscribe_token || '';
-    $('secProtectMedia').checked = !!a.protect_media;
-    $('secToken').textContent = SUB_TOKEN ? '?token=' + SUB_TOKEN : '（未开启订阅令牌保护）';
+    PROTECT_MEDIA = !!a.protect_media;
+    // 保护关着：地址不带 token；保护开着：地址默认带 token
+    SUB_TOKEN = PROTECT_MEDIA ? (a.subscribe_token || '') : '';
+    $('secProtectMedia').checked = PROTECT_MEDIA;
+    $('secToken').textContent = PROTECT_MEDIA
+      ? '?token=' + SUB_TOKEN
+      : '订阅令牌保护已关闭，地址不带令牌';
+    $('btnCopyAptv').textContent = PROTECT_MEDIA ? '复制带令牌的 APTV 地址' : '复制 APTV 地址';
+    $('urlMode').textContent = PROTECT_MEDIA ? '已带令牌' : '无需令牌';
+    $('urlMode').className = 'badge ' + (PROTECT_MEDIA ? 'badge-m3u' : 'badge-other');
     setUrls(); loadFiles();
   }catch(e){}
 }
@@ -462,8 +507,139 @@ $('btnChangePw').onclick = async () => {
   secMsg(r.success ? '密码已修改，当前会话保持有效' : ('失败：' + r.message), !!r.success);
   if(r.success){ $('secOldPw').value=''; $('secNewPw').value=''; $('secNewPw2').value=''; }
 };
+// ---------------------------------------------------------------------------
+// 台标管理
+// ---------------------------------------------------------------------------
+let LOGO_DATA = {user: [], missing: []};
+let logoPending = [];                      // 选好待上传的 [{file, name, url}]
+const logoExt = fn => (fn.match(/\.[A-Za-z0-9]+$/) || ['.png'])[0].toLowerCase();
+function logoMsg(text, ok){
+  $('logoMsg').textContent = text;
+  $('logoMsg').style.color = ok ? 'var(--ok)' : 'var(--danger)';
+}
+async function loadLogos(){
+  try{
+    LOGO_DATA = await fetch('/api/logos').then(x => x.json());
+    renderLogos();
+  }catch(e){}
+}
+function renderLogos(){
+  const d = LOGO_DATA;
+  $('logoSummary').textContent = '内置 ' + d.builtin + ' · 已上传 ' + d.user.length + ' · 频道命中 '
+    + d.matched + ' / ' + d.channel_count + (d.organized_at ? '（上次整理 ' + d.organized_at + '）' : '（尚未整理）');
+  $('logoUserCount').textContent = d.user.length;
+  const list = $('logoUserList');
+  list.innerHTML = d.user.length ? '' : '<span class="hint">还没有上传过台标</span>';
+  for (const u of d.user){
+    const hit = u.matches.length ? '已匹配：' + u.matches.join('、') : '还没匹配到频道';
+    const box = document.createElement('div');
+    box.className = 'logo-item';
+    // 带上修改时间：同名覆盖后预览不会停留在浏览器缓存的旧图
+    box.innerHTML = '<img class="logo-thumb" alt="" src="' + esc(u.url) + '?v=' + encodeURIComponent(u.mtime) + '">' +
+      '<div class="logo-name" title="' + esc(u.name) + '">' + esc(u.name) + '</div>' +
+      '<div class="logo-hit' + (u.matches.length ? '' : ' none') + '" title="' + esc(hit) + '">' + esc(hit) + '</div>' +
+      '<button class="btn btn-sm btn-outline-secondary logo-del">删除</button>';
+    box.querySelector('.logo-del').onclick = () => deleteLogo(u.file);
+    list.appendChild(box);
+  }
+  renderMissing();
+}
+function renderMissing(){
+  const d = LOGO_DATA, box = $('logoMissing');
+  const q = $('logoSearch').value.trim().toLowerCase();
+  const items = d.missing.filter(m => !q || m.name.toLowerCase().indexOf(q) >= 0);
+  $('logoMissingCount').textContent = d.missing.length;
+  if (!d.channel_count){
+    box.innerHTML = '<span class="hint">还没有整理结果，先点上方「立即整理」</span>';
+    return;
+  }
+  box.innerHTML = items.length ? '' : '<span class="hint">没有符合的频道，或都已经有台标了</span>';
+  for (const m of items){
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'logo-chip';
+    b.textContent = m.name;
+    b.title = (m.group ? m.group + ' · ' : '') + '点击为「' + m.name + '」选择台标图片';
+    b.onclick = () => { $('logoOne').dataset.name = m.name; $('logoOne').value = ''; $('logoOne').click(); };
+    box.appendChild(b);
+  }
+}
+function renderPending(){
+  const box = $('logoPending');
+  box.innerHTML = '';
+  for (let i = 0; i < logoPending.length; i++){
+    const it = logoPending[i];
+    const div = document.createElement('div');
+    div.className = 'logo-item';
+    div.innerHTML = '<img class="logo-thumb" alt="" src="' + esc(it.url) + '">' +
+      '<input class="form-control form-control-sm logo-rename" value="' + esc(it.name) + '" title="频道名（保存为「频道名.扩展名」）" maxlength="60">' +
+      '<button class="btn btn-sm btn-outline-secondary logo-rm">移除</button>';
+    div.querySelector('.logo-rename').oninput = e => { it.name = e.target.value; };
+    div.querySelector('.logo-rm').onclick = () => { revokePreview(it.url); logoPending.splice(i, 1); renderPending(); };
+    box.appendChild(div);
+  }
+  $('btnUploadLogos').disabled = !logoPending.length;
+}
+// 本地预览地址；个别环境不支持时只是不显示预览，不影响上传
+const previewUrl = f => (URL.createObjectURL ? URL.createObjectURL(f) : '');
+const revokePreview = u => { if (u && URL.revokeObjectURL) URL.revokeObjectURL(u); };
+$('logoFiles').onchange = e => {
+  for (const f of e.target.files){
+    logoPending.push({file: f, name: f.name.replace(/\.[A-Za-z0-9]+$/, ''), url: previewUrl(f)});
+  }
+  e.target.value = '';
+  renderPending();
+};
+$('logoOne').onchange = async e => {
+  const f = e.target.files[0], name = e.target.dataset.name;
+  e.target.value = '';
+  if (f) await uploadLogos([{file: f, name: name}]);
+};
+$('logoSearch').oninput = renderMissing;
+$('btnRefreshLogos').onclick = loadLogos;
+$('btnUploadLogos').onclick = () => uploadLogos(logoPending);
+async function uploadLogos(items){
+  if (!items.length) return;
+  const fd = new FormData();
+  items.forEach(it => fd.append('file', it.file, it.name + logoExt(it.file.name)));
+  fd.append('names', JSON.stringify(items.map(it => it.name)));
+  if ($('logoAutoOrganize').checked) fd.append('organize', '1');
+  $('btnUploadLogos').disabled = true;
+  try{
+    const resp = await fetch('/api/logos/upload', {method: 'POST', body: fd});
+    const r = await resp.json().catch(() => ({success: false, message: '上传失败（文件太大或网络中断）'}));
+    if (r.saved){
+      for (const it of items) revokePreview(it.url);
+      logoPending = logoPending.filter(it => !items.includes(it));
+      renderPending();
+      const over = r.saved.filter(s => s.overwritten).length;
+      let text = '已上传 ' + r.saved.length + ' 个台标' + (over ? '（其中 ' + over + ' 个覆盖了同名台标）' : '');
+      if (r.errors && r.errors.length) text += '；未上传：' + r.errors.join('；');
+      if (r.organize) text += '，正在整理…';
+      else if (r.organize === false) text += '。' + (r.organize_message || '') + '，稍后点「立即整理」生效';
+      else text += '，点「立即整理」后出现在播放列表里';
+      logoMsg(text, true);
+      loadLogos();
+    } else logoMsg(r.message || '上传失败', false);
+  }catch(e){ logoMsg('上传失败：' + e, false); }
+  $('btnUploadLogos').disabled = !logoPending.length;
+}
+async function deleteLogo(file){
+  if (!confirm('删除台标「' + file + '」？')) return;
+  const fd = {file: file};
+  const r = await fetch('/api/logos/delete', {method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(fd)}).then(x => x.json());
+  if (!r.success){ logoMsg(r.message || '删除失败', false); return; }
+  logoMsg('已删除「' + file + '」', true);
+  if ($('logoAutoOrganize').checked){
+    const j = await fetch('/api/job/start', {method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({mode: 'organize'})}).then(x => x.json());
+    if (!j.success) logoMsg('已删除「' + file + '」，稍后点「立即整理」让它从播放列表里移除', true);
+  } else logoMsg('已删除「' + file + '」，点「立即整理」后它会从播放列表里移除', true);
+  loadLogos();
+}
 setUrls();
-loadSchedule(); loadOrgCfg(); loadFiles(); refresh(); initAuth();
+loadSchedule(); loadOrgCfg(); loadFiles(); refresh(); initAuth(); loadLogos();
 setInterval(refresh, 1500);
 </script>
 </body>

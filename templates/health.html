@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>健康检查 · HBTV All-in-One</title>
+<link rel="icon" type="image/png" href="/static/favicon.png">
+<link href="/static/css/bootstrap.min.css" rel="stylesheet">
+<link href="/static/css/app.css" rel="stylesheet">
+<script src="/static/js/theme.js" defer></script>
+</head>
+<body>
+{% set STATUS_TEXT = {'ok': '正常', 'warn': '注意', 'fail': '异常', 'info': '展示', 'off': '未启用'} %}
+{% set c = report.counts %}
+<div class="topbar">
+  <div class="container topbar-inner">
+    <div class="brand">
+      <div class="brand-mark">&#9654;</div>
+      <div>
+        <h1>HBTV <span>All-in-One</span></h1>
+        <div class="brand-sub">河北电信 IPTV · 健康检查</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <a class="nav-pill" href="/">返回控制台</a>
+      <button class="nav-pill" type="button" data-theme-toggle title="切换深浅色">&#9680; <span data-theme-label>深色</span></button>
+    </div>
+  </div>
+</div>
+
+<div class="container health-page">
+  <div class="health-head">
+    <div>
+      <h2>体检结果
+        {% if report.status == 'ok' %}<span class="st st-ok">一切正常</span>
+        {% elif report.status == 'warn' %}<span class="st st-warn">{{ c.warn }} 项需要注意</span>
+        {% else %}<span class="st st-fail">{{ c.fail }} 项异常</span>{% endif %}
+      </h2>
+      <div class="hint">检查时间 {{ report.time }} · 本页不自动刷新</div>
+    </div>
+    <div class="health-actions">
+      <div class="health-counts">
+        <span class="st st-fail">异常 {{ c.fail }}</span>
+        <span class="st st-warn">注意 {{ c.warn }}</span>
+        <span class="st st-ok">正常 {{ c.ok }}</span>
+      </div>
+      <a class="btn btn-sm btn-outline-secondary" href="/health" title="重新检查一次">&#8635; 刷新</a>
+    </div>
+  </div>
+
+  {% if not detailed %}
+  <div class="card">
+    <div class="card-body">
+      <p class="mb-0">未登录时只核对服务是否在运行。
+        <a href="/login?next=%2Fhealth">登录</a> 后可以看到数据、节目单覆盖、任务计划、配置与连通性的完整检查结果。
+      </p>
+    </div>
+  </div>
+  {% endif %}
+
+  {% for s in report.sections %}
+  <div class="card">
+    <div class="card-header">{{ s.title }}{% if s.intro %}<span class="head-note">{{ s.intro }}</span>{% endif %}</div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm check-table mb-0">
+          <thead>
+            <tr><th class="col-status">状态</th><th class="col-name">检查项</th><th class="col-value">结果</th><th class="col-desc">说明</th></tr>
+          </thead>
+          <tbody>
+            {% for r in s.rows %}
+            <tr>
+              <td><span class="st st-{{ r.status }}">{{ STATUS_TEXT.get(r.status, r.status) }}</span></td>
+              <td class="c-name">{{ r.name }}</td>
+              <td class="c-val">{{ r.value }}</td>
+              <td class="c-desc">{{ r.desc }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if s.chips %}
+      <div class="day-chips">
+        <span class="day-note">每日节目条数（今天高亮）：</span>
+        {% for d in s.chips %}
+        <span class="day-chip {{ d.class }}" title="{{ d.count }} 条节目">{{ d.label }} <b>{{ '{:,}'.format(d.count) }}</b></span>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+</body>
+</html>

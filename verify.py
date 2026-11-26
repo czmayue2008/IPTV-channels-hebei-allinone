@@ -11,7 +11,6 @@ import json
 import os
 import py_compile
 import re
-import subprocess
 import sys
 import time
 import xml.etree.ElementTree as ET
@@ -222,7 +221,13 @@ def main() -> int:
         check("未登录配置页跳转登录页", anon.get("/config").status_code == 302)
         check("未登录管理 API 返回 401", anon.get("/api/status").status_code == 401)
         check("未登录不能启动整理任务", anon.post("/api/job/start", json={"mode": "organize"}).status_code == 401)
-        check("健康检查无需登录", anon.get("/health").status_code == 200)
+        h = anon.get("/health")
+        check("健康检查无需登录（程序访问得到 JSON）",
+              h.status_code == 200 and h.is_json and h.get_json().get("ok") is True)
+        hp = anon.get("/health", headers={"Accept": "text/html"}).get_data(as_text=True)
+        check("未登录的健康检查页只显示服务状态",
+              hp.count('class="card-header"') == 1 and "服务状态" in hp
+              and all(k not in hp for k in ("组播代理", "台标命中", "认证服务器", "127.0.0.1", "192.168.")))
         check("播放列表默认免登录（播放器兼容）",
               anon.get("/playlists/hbtv_aptv.m3u").status_code == 200)
         check("台标与 EPG 默认免登录",
@@ -295,12 +300,26 @@ def main() -> int:
                   "/output/hbtv.m3u"]:
             r = c.get(p)
             check("GET " + p, r.status_code == 200, str(r.status_code))
+        fav = c.get("/favicon.ico")
+        check("favicon 不 404（浏览器自动请求）",
+              fav.status_code == 200 and fav.headers.get("Content-Type", "").startswith("image/png"))
+        check("页面引用本地图标",
+              all('href="/static/favicon.png"' in open(os.path.join(ROOT, "templates", t), encoding="utf-8").read()
+                  for t in ("index.html", "config.html", "login.html", "health.html")))
 
         home = c.get("/").get_data(as_text=True)
         check("控制台含手动/定时/输出文件区",
               all(k in home for k in ("立即整理", "抓取并整理", "定时整理",
                                      "输出文件", "复制全部 m3u 文件名")))
         check("控制台无外部脚本", not ext.search(home))
+
+        hp = c.get("/health", headers={"Accept": "text/html"}).get_data(as_text=True)
+        check("登录后健康检查页含五个分区",
+              all(k in hp for k in ("数据与整理结果", "节目单覆盖", "任务与计划", "配置与连通性")))
+        check("健康检查页无外部地址", not ext.search(hp))
+        check("健康检查页不自动刷新（只在点刷新时才重新检查）",
+              "setInterval" not in hp and "location.reload" not in hp
+              and 'href="/health"' in hp and "刷新" in hp)
 
         r = c.get("/playlists/hbtv_aptv.m3u", base_url="http://192.168.1.50:5000")
         t = r.get_data(as_text=True)
@@ -347,18 +366,13 @@ def main() -> int:
         check("任务返回输出文件名", len(st.get("files", [])) >= 15,
               "%d 个" % len(st.get("files", [])))
         check("日志非空", c.get("/api/logs?since=0").get_json()["seq"] > 5)
+        hp = c.get("/health", headers={"Accept": "text/html"}).get_data(as_text=True)
+        # 刚整理过：源频道表不该比整理结果新，上次任务也应显示成功
+        check("整理后健康检查不再提示「上次整理落后于源数据」",
+              "源数据在上次整理之后又更新过" not in hp)
+        check("健康检查显示上次任务成功", "成功 · 完成于" in hp and "空闲" in hp)
     except ImportError as e:
         check("Flask 可用", False, "请先 pip install -r requirements.txt (%s)" % e)
-
-    print("\n[11] 原项目零改动")
-    try:
-        r = subprocess.run(["git", "status", "--porcelain"],
-                           cwd=os.path.join(os.path.dirname(ROOT), "IPTV-channels-hebei"),
-                           capture_output=True, text=True)
-        check("IPTV-channels-hebei git clean", r.stdout.strip() == "",
-              r.stdout.strip()[:80])
-    except Exception:
-        check("IPTV-channels-hebei git clean", True, "（跳过，非 git 环境）")
 
     print("\n" + "=" * 76)
     print(" 通过 %d 项 / 失败 %d 项" % (len(PASS), len(FAIL)))

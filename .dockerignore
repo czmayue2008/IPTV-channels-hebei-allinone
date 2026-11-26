@@ -14,6 +14,9 @@ config/*.local.json
 config/*.bak
 config/auth.json
 auth.json
+
+# 控制台上传的台标（用户自己的文件）
+config/logos/
 *.secret
 *.secret_key
 *.tmp
