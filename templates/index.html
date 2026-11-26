@@ -66,57 +66,63 @@
       </div>
 
       <div class="card">
-        <div class="card-header">定时整理</div>
-        <div class="card-body">
-          <div class="form-check form-switch mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span>定时整理</span><span id="schBadge" class="badge bg-secondary">未启用</span>
+        </div>
+        <div class="card-body d-flex flex-column">
+          <div class="form-check form-switch">
             <input class="form-check-input" type="checkbox" id="schEnabled">
             <label class="form-check-label" for="schEnabled">启用定时整理（内置调度，无需系统定时任务）</label>
           </div>
+
+          <hr class="my-3">
+
           <div class="row g-3 align-items-end">
-            <div class="col-md-3">
-              <label class="form-label small">模式</label>
+            <div class="col-6 col-lg-3">
+              <label class="form-label small" for="schMode">模式</label>
               <select class="form-select form-select-sm" id="schMode">
                 <option value="interval">按间隔（分钟）</option>
                 <option value="daily">每天固定时间</option>
               </select>
             </div>
-            <div class="col-md-3" id="boxInterval">
-              <label class="form-label small">间隔分钟</label>
+            <div class="col-6 col-lg-3" id="boxInterval">
+              <label class="form-label small" for="schInterval">间隔分钟</label>
               <input type="number" class="form-control form-control-sm" id="schInterval" min="1" max="10080" value="360">
             </div>
-            <div class="col-md-3" id="boxDaily" style="display:none">
-              <label class="form-label small">每日时间</label>
+            <div class="col-6 col-lg-3" id="boxDaily" style="display:none">
+              <label class="form-label small" for="schDaily">每日时间</label>
               <input type="time" class="form-control form-control-sm" id="schDaily" value="04:30">
             </div>
-            <div class="col-md-3">
-              <label class="form-label small">未来天数</label>
+            <div class="col-6 col-lg-3">
+              <label class="form-label small" for="schEpgDays">未来天数</label>
               <input type="number" class="form-control form-control-sm" id="schEpgDays" min="1" max="7" value="3">
-              <div class="hint mt-1">今天之后的节目单天数；手动「抓取并整理」与定时抓取共用</div>
             </div>
-          </div>
-          <div class="row mt-3 g-3 align-items-end">
-            <div class="col-md-3">
-              <label class="form-label small">回看天数（过去）</label>
+            <div class="col-6 col-lg-3">
+              <label class="form-label small" for="schPastDays">回看天数（过去）</label>
               <input type="number" class="form-control form-control-sm" id="schPastDays" min="0" max="14" value="7">
-              <div class="hint mt-1">0 表示不保留历史节目单</div>
-            </div>
-            <div class="col-md-9">
-              <div class="form-check"><input class="form-check-input" type="checkbox" id="schEpgWindow" checked>
-                <label class="form-check-label small" for="schEpgWindow">启用 EPG 滑动窗口：按天归档，每次更新自动删除最旧一天、顺延保留新一天</label></div>
-              <div class="hint mt-1">窗口 = 过去 7 天 + 今天 + 未来 3 天（共 11 天）。历史只读本地归档，首次补齐历史约需 3~4 分钟；关闭窗口则退回「只抓未来 N 天」</div>
             </div>
           </div>
-          <div class="row mt-3">
+
+          <div class="form-check mt-3">
+            <input class="form-check-input" type="checkbox" id="schEpgWindow" checked>
+            <label class="form-check-label small" for="schEpgWindow">启用 EPG 滑动窗口（按天归档，每次更新删最旧一天、顺延保留新一天）</label>
+          </div>
+          <div class="hint mt-1" id="epgWindowHint" style="padding-left:1.5em"></div>
+
+          <hr class="my-3">
+
+          <div class="row g-2">
             <div class="col-md-6">
-              <div class="form-check"><input class="form-check-input" type="checkbox" id="schRunFetch" checked>
+              <div class="form-check mb-0"><input class="form-check-input" type="checkbox" id="schRunFetch" checked>
                 <label class="form-check-label small" for="schRunFetch">定时时同时重新抓取频道与 EPG</label></div>
             </div>
             <div class="col-md-6">
-              <div class="form-check"><input class="form-check-input" type="checkbox" id="schAtStartup">
+              <div class="form-check mb-0"><input class="form-check-input" type="checkbox" id="schAtStartup">
                 <label class="form-check-label small" for="schAtStartup">服务启动后也自动整理一次</label></div>
             </div>
           </div>
-          <div class="mt-3 d-flex gap-2 align-items-center">
+
+          <div class="mt-auto pt-3 d-flex gap-2 align-items-center">
             <button id="btnSaveSchedule" class="btn btn-success btn-sm">保存定时设置</button>
             <span id="scheduleMsg" class="hint"></span>
           </div>
@@ -125,7 +131,7 @@
 
       <div class="card">
         <div class="card-header">整理设置</div>
-        <div class="card-body">
+        <div class="card-body d-flex flex-column">
           <div class="row g-3">
             <div class="col-md-6">
               <label class="form-label small">udpxy / 组播代理地址（内网）</label>
@@ -154,7 +160,7 @@
                 <label class="form-check-label small" for="cfgAlias">同时生成 .m3u 文件名副本</label></div>
             </div>
           </div>
-          <div class="mt-3 d-flex gap-2 align-items-center">
+          <div class="mt-auto pt-3 d-flex gap-2 align-items-center">
             <button id="btnSaveOrg" class="btn btn-success btn-sm">保存整理设置</button>
             <span class="hint">保存后点「立即整理」生效</span><span id="orgMsg" class="hint"></span>
           </div>
@@ -403,7 +409,30 @@ async function loadSchedule(){
   $('schRunFetch').checked = s.run_fetch !== false;
   $('schAtStartup').checked = !!s.run_at_startup;
   toggleMode();
+  updateSchBadge(s.enabled);
+  updateWindowHint();
 }
+// 卡片标题右侧的状态：和「手动整理」一样一眼能看出开没开
+function updateSchBadge(enabled){
+  const b = $('schBadge');
+  b.textContent = enabled ? '已启用' : '未启用';
+  b.className = 'badge ' + (enabled ? 'bg-success' : 'bg-secondary');
+}
+// 窗口说明跟着两个输入框实时算，避免写死「过去 7 天 + 未来 3 天」跟设置对不上
+function updateWindowHint(){
+  const el = $('epgWindowHint');
+  const days = parseInt($('schEpgDays').value, 10) || 3;
+  const pastRaw = parseInt($('schPastDays').value, 10);
+  const past = isNaN(pastRaw) ? 7 : pastRaw;
+  if (!$('schEpgWindow').checked){
+    el.textContent = '已关闭滑动窗口：每次只抓今天 + 未来 ' + days + ' 天，回看天数不生效。';
+    return;
+  }
+  el.textContent = '窗口 = 过去 ' + past + ' 天 + 今天 + 未来 ' + days + ' 天（共 ' + (past + 1 + days) + ' 天）；'
+    + '首次补齐历史约 3~4 分钟，回看天数填 0 即不保留。';
+}
+['schEpgDays', 'schPastDays'].forEach(id => { $(id).oninput = updateWindowHint; });
+$('schEpgWindow').onchange = updateWindowHint;
 async function loadOrgCfg(){
   const c = await fetch('/api/organize_config').then(x => x.json());
   $('cfgUdpxy').value = c.udpxy || '';
@@ -450,7 +479,7 @@ $('btnSaveSchedule').onclick = async () => {
   const r = await fetch('/api/schedule', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify(body)}).then(x => x.json());
   $('scheduleMsg').textContent = r.success ? '已保存，' + new Date().toLocaleTimeString() : ('失败：' + r.message);
-  if (r.success) refresh();
+  if (r.success) { updateSchBadge($('schEnabled').checked); updateWindowHint(); refresh(); }
 };
 $('btnSaveOrg').onclick = async () => {
   const body = {
